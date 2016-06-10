@@ -89,8 +89,8 @@ def predClouds(pastHpix, nowHpix, numSecs):
             curHpix = testHpixes[minDir]
 
     # calculate a deltaTheta and deltaPhi for the overall translation
-    # do this by figuring out where the origin pixel (chosen arbitrarily)
-    # ends up after every translation in transHistory
+    # do this by figuring out where the (pi/2, 0) pixel (chosen 
+    # somewhat arbitrarily) ends up after every translation in transHistory
     originPixStart = hp.ang2pix(nside, math.pi * 0.5, 0)
     originPixEnd = originPixStart
     for i in range(len(transHistory)):
@@ -131,6 +131,10 @@ def calcMse(hpix1, hpix2):
     return mse
 
 if __name__ == "__main__":
+    # generate two cloud maps: past and now, which each have a single
+    # blob of clouds roughly at (theta, phi) = (pi/2, 0) except
+    # slightly translated between the two maps
+
     past = np.zeros(hp.nside2npix(2))
     past[27] = 1
     past = hp.ud_grade(past, nside_out=nside)
@@ -139,6 +143,7 @@ if __name__ == "__main__":
     now[20] = 1
     now = hp.ud_grade(now, nside_out=nside)
 
+    # run the prediction and then show the three maps
     pred = predClouds(past, now, 5 * 60)
 
     hp.mollview(past, min=0, max=1)
