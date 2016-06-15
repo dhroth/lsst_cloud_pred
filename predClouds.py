@@ -9,6 +9,7 @@ import matplotlib.pylab as pylab
 from scipy.signal import convolve2d
 
 from multiprocessing import Pool
+from collections import Counter
 
 nside = 32
 npix = hp.nside2npix(nside)
@@ -81,6 +82,10 @@ def predClouds(pastHpix, nowHpix, numSecs):
     # pastCart into nowCart (or at least get as close as possible)
     overallTrans = np.array([0,0])
 
+    # this counter maps directions which are a local minimum to the 
+    # number of times we've visited that minimum
+    localMinimaNumVisits = Counter()
+
     while True:
         # get the rmse if we stop translating now
         stationaryRmse = calcRmse((nowCart, pastCart, overallTrans))
@@ -97,18 +102,27 @@ def predClouds(pastHpix, nowHpix, numSecs):
         # figure out which direction yields the smallest rmse
         minDirId = np.argmin(rmses)
         minDir = testDirs[minDirId]
-        minMse = rmses[minDirId]
+        minRmse = rmses[minDirId]
 
         # if translating nowCart in all directions yields an increase in
         # mse, then we've found the (local) minimum of mse so we're done
-        # TODO this search is too rigid -- it should perhaps start at
+        # TODO it might improve the search to start at
         # some temperature and then gradually lower the temp over time
-        # Or just do the full cross-correlation...
-        if stationaryRmse <= minMse:
-            break
-        else:
-            print "translating in dir", minDir
-            overallTrans = minDir
+        if stationaryRmse <= minRmse:
+            localMinimaNumVisits[tuple(overallTrans)] += 1
+            # if we've revisited this minimum enough times then it's
+            # probably a pretty stable minimum
+            if localMinimaNumVisits[tuple(overallTrans)] > 5:
+                break
+        
+        # now probabilistically choose a direction based on how close its
+        # rmse is to the minimum rmse
+        probas = [np.exp(minRmse - rmse) for rmse in rmses]
+        probas /= np.sum(probas)
+        chosenDirId = np.random.choice(len(testDirs), p=probas)
+        chosenDir = testDirs[chosenDirId]
+        print "translating in dir", chosenDir
+        overallTrans = chosenDir
 
 
     pool.close()
