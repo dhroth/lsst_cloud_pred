@@ -20,7 +20,7 @@ thetaMax = 70 * np.pi / 180
 # use an XY plane with approximately somewhat more pixels than there 
 # are in the hpix so we don't lose all resolution  at high theta
 xyMax = int(np.sqrt(npix)) * 2
-xyCent = xyMax / 2
+xyCent = int(xyMax / 2)
 
 # when we convert hpix to cartesian, the resulting xy map is square
 # but the signal is only found in a circle inscribed in the square
@@ -321,21 +321,18 @@ def cartesian2Hpix(cart):
     For each pixel in hpix, sample from the corresponding pixel in cart
     """
 
-    yCent = int(cart.shape[0] / 2)
-    xCent = int(cart.shape[1] / 2)
-
     hpix = np.zeros(npix)
     (theta, phi) = hp.pix2ang(nside, np.arange(npix))
 
     r = np.tan(theta) * z
-    x = np.round(r * np.cos(phi)).astype(int)
-    y = np.round(r * np.sin(phi)).astype(int)
+    x = np.floor(r * np.cos(phi)).astype(int)
+    y = np.floor(r * np.sin(phi)).astype(int)
     
     # ignore all pixels with zenith angle higher than thetaMax
     x = x[theta < thetaMax]
     y = y[theta < thetaMax]
     ipixes = np.arange(npix)[theta < thetaMax]
 
-    hpix[ipixes] = cart[x + xCent, y + yCent]
+    hpix[ipixes] = cart[x + xyCent, y + xyCent]
 
     return hpix
