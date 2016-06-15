@@ -214,8 +214,8 @@ def calcRmse((cart1, cart2, direction)):
     xyCent = yMax / 2
     for y in range(yStart, yEnd):
         for x in range(xStart, xEnd):
-            if np.sqrt((y-xyCent)**2 + (x-xyCent)**2) > rMax:
-                continue
+            #if np.sqrt((y-xyCent)**2 + (x-xyCent)**2) > rMax:
+            #    continue
             yOff = x - ySign * direction[0]
             xOff = y - xSign * direction[1]
             mse += (cart1[y,x] - cart2[yOff,xOff])**2
@@ -274,6 +274,7 @@ def hpix2Cartesian(hpix):
     # set the sky pixels to the corresponding hpix pixel
     sky = np.zeros((xyMax, xyMax))
     sky[y.flatten(),x.flatten()] = hpix[ipixes.flatten()]
+    sky[sky == 0] = np.median(sky)
 
     return sky
 
