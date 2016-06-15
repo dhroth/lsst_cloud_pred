@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from scipy.signal import convolve2d
 
+from multiprocessing import Pool
+
 nside = 32
 npix = hp.nside2npix(nside)
 
@@ -23,6 +25,7 @@ SE = np.array([-1,  1])
 S  = np.array([-1,  0])
 
 dirs = [SW, W, NW, N, NE, E, SE, S]
+#dirs = [W, N, E, S]
 
 def predClouds(pastHpix, nowHpix, numSecs):
     """ Predict what the cloud map will be in numSecs secs
@@ -69,6 +72,8 @@ def predClouds(pastHpix, nowHpix, numSecs):
     pylab.imshow(nowCart, vmax = maxPix, cmap=plt.cm.jet)
     plt.colorbar()
     """
+
+    pool = Pool(len(dirs))
     
     # overallTrans is the translation necessary to translate
     # pastCart into nowCart (or at least get as close as possible)
@@ -76,13 +81,16 @@ def predClouds(pastHpix, nowHpix, numSecs):
 
     while True:
         # get the rmse if we stop translating now
-        stationaryRmse = calcRmse(pastCart, nowCart, overallTrans)
+        stationaryRmse = calcRmse((nowCart, pastCart, overallTrans))
         
         # calculate the rmse between pastCart and nowCart when
         # the two have been offset from each other by many directions
         # around the current overallTrans
         testDirs = [overallTrans + direction for direction in dirs]
-        rmses = [calcRmse(pastCart, nowCart, testDir) for testDir in testDirs]
+
+        args = [(nowCart, pastCart, testDir) for testDir in testDirs]
+        rmses = pool.map(calcRmse, args)
+        #rmses = [calcRmse(nowCart, pastCart, testDir) for testDir in testDirs]
         
         # figure out which direction yields the smallest rmse
         minDirId = np.argmin(rmses)
@@ -99,6 +107,10 @@ def predClouds(pastHpix, nowHpix, numSecs):
         else:
             print "translating in dir", minDir
             overallTrans = minDir
+
+
+    pool.close()
+    pool.join()
 
     # now multiply overallTrans by numSecs / (5 minutes) to get
     # the translation needed to transform nowCart into predCart
@@ -131,7 +143,7 @@ def translateCart(cart, direction):
 
     return translatedCart
 
-def calcRmse(cart1, cart2, direction):
+def calcRmse((cart1, cart2, direction)):
     """ Calculate the rmse between cart1 and cart2 when cart2 is shifted by dir
 
     @returns    the root mean squared error
