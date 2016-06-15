@@ -86,16 +86,19 @@ def predClouds(pastHpix, nowHpix, numSecs):
     # number of times we've visited that minimum
     localMinimaNumVisits = Counter()
 
+    # TODO parametrize this better
+    rMax = nowCart.shape[0] / 2 * 0.9
+
     while True:
         # get the rmse if we stop translating now
-        stationaryRmse = calcRmse((nowCart, pastCart, overallTrans))
+        stationaryRmse = calcRmse((nowCart, pastCart, rMax, overallTrans))
         
         # calculate the rmse between pastCart and nowCart when
         # the two have been offset from each other by many directions
         # around the current overallTrans
         testDirs = [overallTrans + direction for direction in dirs]
 
-        args = [(nowCart, pastCart, testDir) for testDir in testDirs]
+        args = [(nowCart, pastCart, rMax, testDir) for testDir in testDirs]
         rmses = pool.map(calcRmse, args)
         #rmses = [calcRmse(nowCart, pastCart, testDir) for testDir in testDirs]
         
@@ -159,15 +162,18 @@ def translateCart(cart, direction):
 
     return translatedCart
 
-def calcRmse((cart1, cart2, direction)):
+def calcRmse((cart1, cart2, rMax, direction)):
     """ Calculate the rmse between cart1 and cart2 when cart2 is shifted by dir
 
     @returns    the root mean squared error
     @param      cart1: the stationary map
     @param      cart2: the map which is shifted
     @param      direction: a list [y,x] specifying the direction to translate
+    @param      rMax: a radius inside of which all pixels are guaranteed to be
+                seen -- i.e. not equal to -1
     @throws     ValueError if cart1 and cart2 are different shapes or if
-                they are not squares
+                they are not squares or if there are unseen pixels inside
+                of rMax
     """
     if cart1.shape != cart2.shape:
         raise ValueError("cart1 and cart2 must have the same shape")
@@ -219,19 +225,22 @@ def calcRmse((cart1, cart2, direction)):
     mse = 0
     numPix = 0
 
-    # only look at a circle 80% as big as can be inscribed
-    # without this, all shifts are unfavorable since zero
-    # pixels are moved into signal pixels
-    # TODO should probably do some kind of border extending
-    # instead of this hacky thing
-    rMax = 0.8 * yMax / 2
     xyCent = yMax / 2
     for y in range(yStart, yEnd):
         for x in range(xStart, xEnd):
-            #if np.sqrt((y-xyCent)**2 + (x-xyCent)**2) > rMax:
-            #    continue
             yOff = x - ySign * direction[0]
             xOff = y - xSign * direction[1]
+
+            # don't count this pixel if it's outside rMax on either the
+            # stationary or the translated maps
+            if np.sqrt((y - xyCent)**2 + (x - xyCent)**2) > rMax:
+                continue
+            if np.sqrt((yOff - xyCent)**2 + (xOff - xyCent)**2) > rMax:
+                continue
+
+            if cart1[y,x] == -1 or cart2[yOff,xOff] == -1:
+                raise ValueError("there must be no unseen pixels within rMax")
+
             mse += (cart1[y,x] - cart2[yOff,xOff])**2
             numPix += 1
     mse /= numPix
