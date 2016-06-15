@@ -157,28 +157,46 @@ def predClouds(pastHpix, nowHpix, numSecs):
     predTrans = -1 * np.round(overallTrans * scaleFactor).astype(int)
     predCart = translateCart(nowCart, predTrans)
 
-    """ Print out predCart for debugging
-    fig3 = plt.figure("predCartInPred")
-    pylab.imshow(predCart, vmax = 3000, cmap = plt.cm.jet)
+    """ Print out predCart for debugging"""
+    translatedPastCart = translateCart(pastCart, -1 * overallTrans)
+    fig3 = plt.figure("translated past cart")
+    pylab.imshow(translatedPastCart, vmax=10000, cmap = plt.cm.jet)
     plt.colorbar()
-    """
+    fig4 = plt.figure("predCartInPred")
+    pylab.imshow(predCart, vmax = 10000, cmap = plt.cm.jet)
+    plt.colorbar()
+    """"""
 
     return cartesian2Hpix(predCart)
 
 def translateCart(cart, direction):
     """ Translate the passed-in cartesian map in the specified direction
 
-    The translation wraps around pixels which are bumped off the edge
-    TODO not sure if that's what we want?
-
     @returns    the translated map
     @param      cart: the input map
     @param      direction: a list [y,x] of the direction to translate cart by
     """
-    # translate the array the necessary amount in the y direction
-    # and then the necessary amount in the x direction
-    translatedCart = np.roll(cart, direction[0], axis=0)
-    translatedCart = np.roll(translatedCart, direction[1], axis=1)
+    # translate the array by padding it with zeros and then cropping off the
+    # extra numbers
+    if direction[0] >= 0:
+        padY = (direction[0], 0)
+    else:
+        padY = (0, -1 * direction[0])
+    if direction[1] >= 0:
+        padX = (direction[1], 0)
+    else:
+        padX = (0, -1 * direction[1])
+
+    paddedCart = np.pad(cart, (padY, padX), mode="constant")
+
+    # now crop the image to the original size
+    cropY = (padY[1], paddedCart.shape[0] - padY[0])
+    cropX = (padX[1], paddedCart.shape[1] - padX[0])
+    translatedCart = paddedCart[cropY[0]:cropY[1],cropX[0]:cropX[1]]
+
+    # np.roll translates with wrap around but we probably don't want this
+    #translatedCart = np.roll(cart, direction[0], axis=0)
+    #translatedCart = np.roll(translatedCart, direction[1], axis=1)
 
     return translatedCart
 
