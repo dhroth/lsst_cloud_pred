@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 
 import numpy as np
 import healpy as hp
@@ -45,7 +46,11 @@ S  = np.array([-1,  0])
 # each dir is considered in parallel so you man not want more
 # dirs than you have cores
 dirs = [SW, W, NW, N, NE, E, SE, S]
-dirs += [W + W, N + N, E + E, S + S]
+dirs += [2*W, 2*N, 2*E, 2*S]
+dirs += [3*W, 3*N, 3*E, 3*S]
+dirs += [4*W, 4*N, 4*E, 4*S]
+dirs += [10*W, 10*N, 10*E, 10*S]
+
 #dirs = [W, N, E, S]
 
 def predClouds(pastHpix, nowHpix, numSecs):
@@ -139,17 +144,17 @@ def predClouds(pastHpix, nowHpix, numSecs):
         probas /= np.sum(probas)
         chosenDirId = np.random.choice(len(testDirs), p=probas)
         chosenDir = testDirs[chosenDirId]
-        print "translating in dir", chosenDir
+        print("translating in dir", chosenDir)
         overallTrans = chosenDir
-
 
     pool.close()
     pool.join()
 
     # now multiply overallTrans by numSecs / (5 minutes) to get
     # the translation needed to transform nowCart into predCart
+    # also multiply by -1 because overallTrans is in the wrong direction
     scaleFactor = numSecs / (5 * 60.0)
-    predTrans = np.round(overallTrans * scaleFactor).astype(int)
+    predTrans = -1 * np.round(overallTrans * scaleFactor).astype(int)
     predCart = translateCart(nowCart, predTrans)
 
     """ Print out predCart for debugging
@@ -236,23 +241,29 @@ def calcRmse((cart1, cart2, direction)):
     mse = 0
     numPix = 0
 
-    for y in range(yStart, yEnd):
-        for x in range(xStart, xEnd):
-            yOff = x - ySign * direction[0]
-            xOff = y - xSign * direction[1]
+    #print(direction)
+    for y in range(yStart, yEnd, 2):
+        #print("\n", end="")
+        for x in range(xStart, xEnd, 2):
+            yOff = y - ySign * direction[0]
+            xOff = x - xSign * direction[1]
 
             # don't count this pixel if it's outside rMax on either the
             # stationary or the translated maps
             if np.sqrt((y - xyCent)**2 + (x - xyCent)**2) > rMax:
+                #print("x", end="")
                 continue
             if np.sqrt((yOff - xyCent)**2 + (xOff - xyCent)**2) > rMax:
+                #print("X", end="")
                 continue
+            #print("o", end="")
 
             if cart1[y,x] == -1 or cart2[yOff,xOff] == -1:
                 raise ValueError("there must be no unseen pixels within rMax")
 
             mse += (cart1[y,x] - cart2[yOff,xOff])**2
             numPix += 1
+    #print("\n")
     mse /= numPix
     return np.sqrt(mse)
 

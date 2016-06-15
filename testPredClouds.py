@@ -25,8 +25,10 @@ def fits2Hpix(fits):
     """
 
     # TODO this should probably be read from the fits files or something
-    xMax = 2897
-    yMax = 1935
+    #xMax = 2897
+    #yMax = 1935
+    xMax = 2888
+    yMax = 1924
     xCent = xMax / 2
     yCent = yMax / 2
 
@@ -66,7 +68,10 @@ def fits2Hpix(fits):
     # TODO are the 3 arrays in the fits file actually (r,g,b)? When I 
     # tried pylab.imshow() on the fits.data, the image looked rather red
     # I generated the fits files using the raw2fits script
-    (r,g,b) = fits
+    # the fits files that I got from Chris in the ut111515 directory only
+    # have one subarray it seems so I'll just pretend it's blue for now
+    #(r,g,b) = fits
+    b = fits
 
     b -= bias
 
