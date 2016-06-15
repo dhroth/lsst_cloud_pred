@@ -8,7 +8,7 @@ import matplotlib.pylab as pylab
 from predClouds import predClouds
 # TODO kind of silly
 from predClouds import nside
-from predClouds import maxTheta
+from predClouds import thetaMax
 
 from astropy.io import fits
 
@@ -66,11 +66,11 @@ def fits2Hpix(fits):
     # TODO are the 3 arrays in the fits file actually (r,g,b)? When I 
     # tried pylab.imshow() on the fits.data, the image looked rather red
     # I generated the fits files using the raw2fits script
-    (r,g,b) = fits.astype(float)
+    (r,g,b) = fits
 
     b -= bias
 
-    b[theta > maxTheta] = -1
+    b[theta > thetaMax] = -1
 
     # the blue probably has the most information, so ignore r and g
     nside = 32

@@ -14,10 +14,25 @@ from collections import Counter
 nside = 32
 npix = hp.nside2npix(nside)
 
-maxTheta = 70 * np.pi / 180
+thetaMax = 70 * np.pi / 180
 
-# there are 8 possible directions to translate the healpix:
-# SW, W, NW, N, NE, E, SE, S
+# use an XY plane with approximately somewhat more pixels than there 
+# are in the hpix so we don't lose all resolution  at high theta
+xyMax = int(np.sqrt(npix)) * 2
+xyCent = xyMax / 2
+
+# when we convert hpix to cartesian, the resulting xy map is square
+# but the signal is only found in a circle inscribed in the square
+# (since the passed-in healpixes don't go all the way to the horizon)
+# rMax is the radius in pixels of that circle
+rMax = 0.9 * xyMax / 2
+
+# z is the distance in pixels from the observer to the sky
+# it is chosen to make the skymap fill our XY coordinates
+# TODO I'm not sure I'm doing this right but it seems to work?
+z = 40
+
+# there are 8 nearest pixel neighbors: SW, W, NW, N, NE, E, SE, S
 SW = np.array([-1, -1])
 W  = np.array([ 0, -1])
 NW = np.array([ 1, -1])
@@ -27,7 +42,10 @@ E  = np.array([ 0,  1])
 SE = np.array([-1,  1])
 S  = np.array([-1,  0])
 
+# each dir is considered in parallel so you man not want more
+# dirs than you have cores
 dirs = [SW, W, NW, N, NE, E, SE, S]
+dirs += [W + W, N + N, E + E, S + S]
 #dirs = [W, N, E, S]
 
 def predClouds(pastHpix, nowHpix, numSecs):
@@ -86,19 +104,16 @@ def predClouds(pastHpix, nowHpix, numSecs):
     # number of times we've visited that minimum
     localMinimaNumVisits = Counter()
 
-    # TODO parametrize this better
-    rMax = nowCart.shape[0] / 2 * 0.9
-
     while True:
         # get the rmse if we stop translating now
-        stationaryRmse = calcRmse((nowCart, pastCart, rMax, overallTrans))
+        stationaryRmse = calcRmse((nowCart, pastCart, overallTrans))
         
         # calculate the rmse between pastCart and nowCart when
         # the two have been offset from each other by many directions
         # around the current overallTrans
         testDirs = [overallTrans + direction for direction in dirs]
 
-        args = [(nowCart, pastCart, rMax, testDir) for testDir in testDirs]
+        args = [(nowCart, pastCart, testDir) for testDir in testDirs]
         rmses = pool.map(calcRmse, args)
         #rmses = [calcRmse(nowCart, pastCart, testDir) for testDir in testDirs]
         
@@ -162,17 +177,15 @@ def translateCart(cart, direction):
 
     return translatedCart
 
-def calcRmse((cart1, cart2, rMax, direction)):
+def calcRmse((cart1, cart2, direction)):
     """ Calculate the rmse between cart1 and cart2 when cart2 is shifted by dir
 
     @returns    the root mean squared error
     @param      cart1: the stationary map
     @param      cart2: the map which is shifted
     @param      direction: a list [y,x] specifying the direction to translate
-    @param      rMax: a radius inside of which all pixels are guaranteed to be
-                seen -- i.e. not equal to -1
     @throws     ValueError if cart1 and cart2 are different shapes or if
-                they are not squares or if there are unseen pixels inside
+                they are not squares or if there are unseen pixels (=-1) inside
                 of rMax
     """
     if cart1.shape != cart2.shape:
@@ -180,10 +193,8 @@ def calcRmse((cart1, cart2, rMax, direction)):
 
     (yMax, xMax) = cart1.shape
 
-    # TODO limiting to squares is arbitrary, but hpix2cart outputs
-    # squares, and assuming that the maps are squares with the signal in
-    # inscribed circles makes things convenient. This should probably
-    # be handled more elegantly though
+    # We assume that the maps are squares with the signal in inscribed
+    # circles. This conforms with the output of hpix2Cartesian()
     if yMax != xMax:
         raise ValueError("the passed in maps must be square")
 
@@ -225,7 +236,6 @@ def calcRmse((cart1, cart2, rMax, direction)):
     mse = 0
     numPix = 0
 
-    xyCent = yMax / 2
     for y in range(yStart, yEnd):
         for x in range(xStart, xEnd):
             yOff = x - ySign * direction[0]
@@ -249,7 +259,7 @@ def calcRmse((cart1, cart2, rMax, direction)):
 def hpix2Cartesian(hpix):
     """ Convert a healpix image to a cartesian cloud map
 
-    @returns    a cartesian map
+    @returns    a square cartesian map with the signal in an inscribed circle
     @param      hpix: the healpix to be converted
 
     The top plane in the crude picture below is the cartesian plane
@@ -264,13 +274,6 @@ def hpix2Cartesian(hpix):
     the calculated r.
     """
 
-    # use an XY plane with somewhat more pixels
-    # than there are in the hpix so we don't lose all resolution
-    # at high theta
-    # TODO this 2 is arbitrary and should be a parameter
-    xyMax = int(np.sqrt(hpix.size)) * 2
-    xyCent = xyMax / 2
-
     # now for each (x,y), sample the corresponding hpix pixel
     # see fits2Hpix() for an explanation of x, y, and cart
     x = np.repeat([np.arange(-xyCent, xyCent)], xyMax, axis=0).T
@@ -280,9 +283,6 @@ def hpix2Cartesian(hpix):
     # calculate theta and phi of each pixel in the cartesian map
     r = np.linalg.norm(cart, axis=2) 
     phi = np.arctan2(y, x).T
-    # z is chosen arbitrarily to make the skymap fill our XY coordinates
-    # TODO I'm not sure I'm doing this right but it seems to work?
-    z = 40
     theta = np.arctan(r / z)
 
     # ipixes is an array of pixel indices corresponding to theta and phi
@@ -316,16 +316,14 @@ def cartesian2Hpix(cart):
     hpix = np.zeros(npix)
     (theta, phi) = hp.pix2ang(nside, np.arange(npix))
 
-    # TODO same problem as in hpix2Cartesian
-    z = 40
     r = np.tan(theta) * z
     x = np.round(r * np.cos(phi)).astype(int)
     y = np.round(r * np.sin(phi)).astype(int)
     
-    # ignore all pixels with zenith angle higher than maxTheta
-    x = x[theta < maxTheta]
-    y = y[theta < maxTheta]
-    ipixes = np.arange(npix)[theta < maxTheta]
+    # ignore all pixels with zenith angle higher than thetaMax
+    x = x[theta < thetaMax]
+    y = y[theta < thetaMax]
+    ipixes = np.arange(npix)[theta < thetaMax]
 
     hpix[ipixes] = cart[x + xCent, y + yCent]
 
