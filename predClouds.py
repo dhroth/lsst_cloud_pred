@@ -13,6 +13,8 @@ from multiprocessing import Pool
 nside = 32
 npix = hp.nside2npix(nside)
 
+maxTheta = 70 * np.pi / 180
+
 # there are 8 possible directions to translate the healpix:
 # SW, W, NW, N, NE, E, SE, S
 SW = np.array([-1, -1])
@@ -296,11 +298,10 @@ def cartesian2Hpix(cart):
     x = np.round(r * np.cos(phi)).astype(int)
     y = np.round(r * np.sin(phi)).astype(int)
     
-    # ignore all pixels with zenith angle higher than 70 degrees
-    # TODO parametrize this
-    x = x[theta < 70 * np.pi / 180]
-    y = y[theta < 70 * np.pi / 180]
-    ipixes = np.arange(npix)[theta < 70 * np.pi / 180]
+    # ignore all pixels with zenith angle higher than maxTheta
+    x = x[theta < maxTheta]
+    y = y[theta < maxTheta]
+    ipixes = np.arange(npix)[theta < maxTheta]
 
     hpix[ipixes] = cart[x + xCent, y + yCent]
 

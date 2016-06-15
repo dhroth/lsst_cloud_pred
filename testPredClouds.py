@@ -8,6 +8,7 @@ import matplotlib.pylab as pylab
 from predClouds import predClouds
 # TODO kind of silly
 from predClouds import nside
+from predClouds import maxTheta
 
 from astropy.io import fits
 
@@ -69,8 +70,7 @@ def fits2Hpix(fits):
 
     b -= bias
 
-    # TODO parametrize
-    b[theta > 70 * np.pi / 180] = 0
+    b[theta > maxTheta] = 0
 
     # the blue probably has the most information, so ignore r and g
     nside = 32
