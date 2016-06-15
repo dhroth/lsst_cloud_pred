@@ -98,8 +98,13 @@ def removeSun(sky):
 """
 
 if __name__ == "__main__":
-    filename1 = "fits/ut042816.daycal.0220.fits"
-    filename2 = "fits/ut042816.daycal.0230.fits"
+    # these two are files I converted with raw2fits
+    #filename1 = "fits/ut042816.daycal.0960.fits"
+    #filename2 = "fits/ut042816.daycal.0980.fits"
+    
+    # these two are files Chris put in /data/allsky/ut111515
+    filename1 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0250.fits"
+    filename2 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0450.fits"
 
     past = fits2Hpix(fits.open(filename1)[0].data)
     now = fits2Hpix(fits.open(filename2)[0].data)
