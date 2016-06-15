@@ -99,7 +99,7 @@ def removeSun(sky):
 
 if __name__ == "__main__":
     # these two are files I converted with raw2fits
-    #filename1 = "fits/ut042816.daycal.0960.fits"
+    #filename1 = "fits/ut042816.daycal.0920.fits"
     #filename2 = "fits/ut042816.daycal.0980.fits"
     
     # these two are files Chris put in /data/allsky/ut111515
@@ -110,13 +110,13 @@ if __name__ == "__main__":
     now = fits2Hpix(fits.open(filename2)[0].data)
 
     maxPix = max(np.max(past),np.max(now))
-    hp.mollview(past, max=maxPix, title="pastMollview")
-    hp.mollview(now,  max=maxPix, title="nowMollview")
+    #hp.mollview(past, max=maxPix, title="pastMollview")
+    #hp.mollview(now,  max=maxPix, title="nowMollview")
     
     # run the prediction 
     pred = predClouds(past, now, 5 * 60)
 
-    hp.mollview(pred, max=maxPix)
+    #hp.mollview(pred, max=maxPix)
 
     #plt.figure("predCart")
     #pylab.imshow(hpix2Cartesian(pred), vmax = 3000, cmap=plt.cm.jet)

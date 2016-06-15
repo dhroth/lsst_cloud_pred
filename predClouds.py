@@ -88,16 +88,16 @@ def predClouds(pastHpix, nowHpix, numSecs):
     pastCart = hpix2Cartesian(pastHpix)
     nowCart = hpix2Cartesian(nowHpix)
 
-    """ Print out the cartesian maps for debugging
+    """ Print out the cartesian maps for debugging"""
     maxPix = max(np.max(pastCart), np.max(nowCart))
-    maxPix = 3000
+    maxPix = 10000
     fig1 = plt.figure("pastCart")
     pylab.imshow(pastCart, vmax = maxPix, cmap=plt.cm.jet)
     plt.colorbar()
     fig2 = plt.figure("nowCart")
     pylab.imshow(nowCart, vmax = maxPix, cmap=plt.cm.jet)
     plt.colorbar()
-    """
+    """"""
 
     pool = Pool(len(dirs))
     
