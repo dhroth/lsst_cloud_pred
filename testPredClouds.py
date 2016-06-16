@@ -1,4 +1,5 @@
 from __future__ import division
+from __future__ import print_function
 
 import numpy as np
 import healpy as hp
@@ -85,28 +86,75 @@ if __name__ == "__main__":
     #filename1 = "fits/ut042816.daycal.0920.fits"
     #filename2 = "fits/ut042816.daycal.0980.fits"
     
-    # these two are files Chris put in /data/allsky/ut111515
-    filename1 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0250.fits"
-    filename2 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0269.fits"
+    # these are files Chris put in /data/allsky/ut111515
+    dataDir = "/home/drothchild/data/allsky/ut111515/"
+    filePrefix = "ut111515.daycal."
+    filePostfix = ".fits"
+    def getFilename(filenum):
+        return dataDir + filePrefix + filenum + filePostfix
 
-    pastHpix = fits2Hpix(fits.open(filename1)[0].data)
-    nowHpix = fits2Hpix(fits.open(filename2)[0].data)
+    pastFilename   = getFilename("0250")
+    nowFilename    = getFilename("0269")
+    futureFilename = getFilename("0288")
+
+    pastHpix   = fits2Hpix(fits.open(pastFilename  )[0].data)
+    nowHpix    = fits2Hpix(fits.open(nowFilename   )[0].data)
+    futureHpix = fits2Hpix(fits.open(futureFilename)[0].data)
 
     # convert the two healpix maps to cartesian maps
-    pastCart = cartesianSky.fromHpix(pastHpix)
-    nowCart = cartesianSky.fromHpix(nowHpix)
+    pastCart   = cartesianSky.fromHpix(pastHpix)
+    nowCart    = cartesianSky.fromHpix(nowHpix)
+    futureCart = cartesianSky.fromHpix(futureHpix)
 
-   
     # run the prediction 
     predCart = predClouds(pastCart, nowCart, 5 * 60)
 
-    maxPix = max(pastCart.max(), nowCart.max(), predCart.max())
+    maxPix = max(pastCart.max(), nowCart.max(), 
+                 predCart.max(), futureCart.max())
 
     pastCart.plot(maxPix, "past")
     nowCart.plot(maxPix, "now")
     predCart.plot(maxPix, "pred")
+    futureCart.plot(maxPix, "future")
 
     # calculate various forms of accuracy
 
+    # cloudyThreshold would presumably be determined by the tolerance
+    # LSST has for looking through clouds
+    cloudyThreshold = 1000 
+    numPix = 0
+    numPredCloudyPix = 0
+    numFutureCloudyPix = 0
+    numPredAndFutureCloudyPix = 0
+    numPredClearAndFutureCloudyPix = 0
+    numPredCloudyAndFutureClearPix = 0
+    for y in range(cartesianSky.xyMax):
+        for x in range(cartesianSky.xyMax):
+            if (not predCart.isPixelValid([y,x]) or
+                not futureCart.isPixelValid([y,x])):
+                continue
+            isPredCloudy = predCart[y,x] > cloudyThreshold
+            isFutureCloudy = futureCart[y,x] > cloudyThreshold
+
+            numPix += 1 
+            if isPredCloudy:  
+                numPredCloudyPix += 1
+            if isFutureCloudy:
+                numFutureCloudyPix += 1
+            if isPredCloudy and isFutureCloudy:
+                numPredAndFutureCloudyPix += 1
+            if not isPredCloudy and isFutureCloudy:
+                numPredClearAndFutureCloudyPix += 1
+            if isPredCloudy and not isFutureCloudy:
+                numPredCloudyAndFutureClearPix += 1
+    print("Of the pixels which turned out to be cloudy, ",
+          numPredAndFutureCloudyPix / numFutureCloudyPix * 100,
+          "percent of them were predicted to be cloudy.")
+    print("Of the pixels which turned out to be cloudy,",
+          numPredClearAndFutureCloudyPix / numFutureCloudyPix * 100,
+          "percent of them were predicted to be clear.")
+    print("Of the pixels which turned out to be clear,",
+          numPredCloudyAndFutureClearPix / (numPix - numFutureCloudyPix) * 100,
+          "percent of them were predicted to be cloudy.")
 
     plt.show()

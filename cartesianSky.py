@@ -145,6 +145,12 @@ class CartesianSky:
     def max(self):
         return np.max(self.cart)
 
+    def std(self):
+        return np.std(self.cart[self.validMask])
+
+    def mean(self):
+        return np.mean(self.cart[self.validMask])
+
 
 def fromHpix(hpix):
     """ Convert a healpix image to a cartesian cloud map
