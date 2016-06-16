@@ -2,7 +2,6 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-import healpy as hp
 import cartesianSky
 from cartesianSky import CartesianSky
 
@@ -32,13 +31,10 @@ dirs += [10*W, 10*N, 10*E, 10*S]
 
 #dirs = [W, N, E, S]
 
-def predClouds(pastHpix, nowHpix, numSecs):
+def predClouds(pastCart, nowCart, numSecs):
     """ Predict what the cloud map will be in numSecs secs
 
-    First, convert pastHpix and nowPix to cartesian maps, since
-    we model clouds as shapes moving in a flat 2d space.
-
-    Then, translate pastCart in all possible directions and calculate
+    Translate pastCart in all possible directions and calculate
     the rmse between the translated map and nowCart. Choose the
     translated map with the lowest rmse. Continue translating
     until we reach a minimum rmse.
@@ -47,28 +43,23 @@ def predClouds(pastHpix, nowHpix, numSecs):
     numSecs and apply to nowCart to generate the predicted cloud
     map, which is returned in hpix format
 
-    @returns    healpix map representing the predicted cloud map
+    @returns    CartesianSky representing the predicted cloud map
                 in numSecs
-    @param      pastHpix: a healpix of the cloud map 5 minutes ago
+    @param      pastCart: a CartesianSky of the cloud map 5 minutes ago
                 (5 minutes is arbitrary and can easily be changed)
-    @param      nowHpix: a healpix of the current cloud map
+    @param      nowCart: a CartesianSky of the current cloud map
     @param      numSecs: the number of seconds into the future to
                 make a prediction for
-    @throws     ValueError if pastHpix and curHpix have different
-                sizes or if numSecs is <= 0
+    @throws     ValueError if numSecs is <= 0
+    @throws     TypeError if pastCart or nowCart are not CartesianSky objects
     """
 
-    if pastHpix.size != nowHpix.size:
-        raise ValueError("pastHpix and nowHpix must have the same size")
     if numSecs <= 0:
         raise ValueError("numSecs must be >= 0")
-
-    # convert the two healpix maps to cartesian maps
-    pastCart = cartesianSky.fromHpix(pastHpix)
-    #pastCart.plot(pastCart.max(), "past")
-    #pastCart.translate(np.array([0,20])).plot(pastCart.max(), "trans")
-    #plt.show()
-    nowCart = cartesianSky.fromHpix(nowHpix)
+    if not isinstance(pastCart, CartesianSky):
+        raise TypeError("pastCart must be a CartesianSky instance")
+    if not isinstance(nowCart, CartesianSky):
+        raise TypeError("nowCart must be a CartesianSky instance")
 
     pool = Pool(len(dirs))
     
@@ -128,7 +119,7 @@ def predClouds(pastHpix, nowHpix, numSecs):
     predTrans = -1 * np.round(overallTrans * scaleFactor).astype(int)
     predCart = nowCart.translate(predTrans)
 
-    """ Print out the cartesian maps for debugging"""
+    """ Print out the cartesian maps for debugging
     translatedPastCart = pastCart.translate(-1 * overallTrans)
     maxPix = max(pastCart.max(), nowCart.max(),
                  translatedPastCart.max(), predCart.max()) 
@@ -136,9 +127,9 @@ def predClouds(pastHpix, nowHpix, numSecs):
     nowCart.plot(maxPix, "nowCart")
     translatedPastCart.plot(maxPix, "translatedPastCart")
     predCart.plot(maxPix, "predCart")
-    """"""
+    """
 
-    return cartesianSky.toHpix(predCart)
+    return predCart
 
 def calcRmse((cart1, cart2, direction)):
     """ Calculate the rmse between cart1 and cart2 when cart2 is shifted by dir

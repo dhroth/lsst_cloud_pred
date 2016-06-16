@@ -6,13 +6,10 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 
 from predClouds import predClouds
-# TODO kind of silly
-from cartesianSky import nside
-from cartesianSky import thetaMax
+import cartesianSky
+from cartesianSky import CartesianSky
 
 from astropy.io import fits
-
-npix = hp.nside2npix(nside)
 
 def fits2Hpix(fits):
     """ Convert a fits image to a healpix map
@@ -75,12 +72,11 @@ def fits2Hpix(fits):
 
     b -= bias
 
-    b[theta > thetaMax] = -1
+    b[theta > cartesianSky.thetaMax] = -1
 
     # the blue probably has the most information, so ignore r and g
-    nside = 32
-    hpix = np.zeros(hp.nside2npix(nside))
-    hpix[hp.ang2pix(nside, theta, phi)] = b
+    hpix = np.zeros(cartesianSky.npix)
+    hpix[hp.ang2pix(cartesianSky.nside, theta, phi)] = b
     
     return hpix
 
@@ -91,22 +87,26 @@ if __name__ == "__main__":
     
     # these two are files Chris put in /data/allsky/ut111515
     filename1 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0250.fits"
-    filename2 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0300.fits"
+    filename2 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0269.fits"
 
-    past = fits2Hpix(fits.open(filename1)[0].data)
-    now = fits2Hpix(fits.open(filename2)[0].data)
+    pastHpix = fits2Hpix(fits.open(filename1)[0].data)
+    nowHpix = fits2Hpix(fits.open(filename2)[0].data)
 
-    maxPix = max(np.max(past),np.max(now))
-    #hp.mollview(past, max=maxPix, title="pastMollview")
-    #hp.mollview(now,  max=maxPix, title="nowMollview")
-    
+    # convert the two healpix maps to cartesian maps
+    pastCart = cartesianSky.fromHpix(pastHpix)
+    nowCart = cartesianSky.fromHpix(nowHpix)
+
+   
     # run the prediction 
-    pred = predClouds(past, now, 5 * 60)
+    predCart = predClouds(pastCart, nowCart, 5 * 60)
 
-    #hp.mollview(pred, max=maxPix)
+    maxPix = max(pastCart.max(), nowCart.max(), predCart.max())
 
-    #plt.figure("predCart")
-    #pylab.imshow(hpix2Cartesian(pred), vmax = 3000, cmap=plt.cm.jet)
-    #plt.colorbar()
+    pastCart.plot(maxPix, "past")
+    nowCart.plot(maxPix, "now")
+    predCart.plot(maxPix, "pred")
+
+    # calculate various forms of accuracy
+
 
     plt.show()
