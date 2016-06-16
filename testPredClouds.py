@@ -7,8 +7,8 @@ import matplotlib.pylab as pylab
 
 from predClouds import predClouds
 # TODO kind of silly
-from predClouds import nside
-from predClouds import thetaMax
+from cartesianSky import nside
+from cartesianSky import thetaMax
 
 from astropy.io import fits
 
@@ -84,19 +84,6 @@ def fits2Hpix(fits):
     
     return hpix
 
-""" I put this in but haven't used or tested it. Not sure if we'll actually
-need it since eventually this'll get run on night-time images
-def removeSun(sky):
-    # average the image to find the sun
-    n = 5
-    k = np.ones(n,n) / n**2
-    avg = convolve2d(sky, k, mode="same")
-    sunPos = np.unravel_index(avg.argmax(), avg.shape)
-    
-    isNearSun = np.linalg.norm(cart - sunPos) < sunStomp
-    sky[isNearSun] = 0
-"""
-
 if __name__ == "__main__":
     # these two are files I converted with raw2fits
     #filename1 = "fits/ut042816.daycal.0920.fits"
@@ -104,7 +91,7 @@ if __name__ == "__main__":
     
     # these two are files Chris put in /data/allsky/ut111515
     filename1 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0250.fits"
-    filename2 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0450.fits"
+    filename2 = "/home/drothchild/data/allsky/ut111515/ut111515.daycal.0300.fits"
 
     past = fits2Hpix(fits.open(filename1)[0].data)
     now = fits2Hpix(fits.open(filename2)[0].data)

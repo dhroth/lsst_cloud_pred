@@ -3,35 +3,14 @@ from __future__ import print_function
 
 import numpy as np
 import healpy as hp
-import math
+import cartesianSky
+from cartesianSky import CartesianSky
 
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
-from scipy.signal import convolve2d
 
 from multiprocessing import Pool
 from collections import Counter
-
-nside = 32
-npix = hp.nside2npix(nside)
-
-thetaMax = 70 * np.pi / 180
-
-# use an XY plane with approximately somewhat more pixels than there 
-# are in the hpix so we don't lose all resolution  at high theta
-xyMax = int(np.sqrt(npix)) * 2
-xyCent = int(xyMax / 2)
-
-# when we convert hpix to cartesian, the resulting xy map is square
-# but the signal is only found in a circle inscribed in the square
-# (since the passed-in healpixes don't go all the way to the horizon)
-# rMax is the radius in pixels of that circle
-rMax = 0.9 * xyMax / 2
-
-# z is the distance in pixels from the observer to the sky
-# it is chosen to make the skymap fill our XY coordinates
-# TODO I'm not sure I'm doing this right but it seems to work?
-z = 40
 
 # there are 8 nearest pixel neighbors: SW, W, NW, N, NE, E, SE, S
 SW = np.array([-1, -1])
@@ -43,7 +22,7 @@ E  = np.array([ 0,  1])
 SE = np.array([-1,  1])
 S  = np.array([-1,  0])
 
-# each dir is considered in parallel so you man not want more
+# each dir is considered in parallel so you may not want more
 # dirs than you have cores
 dirs = [SW, W, NW, N, NE, E, SE, S]
 dirs += [2*W, 2*N, 2*E, 2*S]
@@ -85,19 +64,11 @@ def predClouds(pastHpix, nowHpix, numSecs):
         raise ValueError("numSecs must be >= 0")
 
     # convert the two healpix maps to cartesian maps
-    pastCart = hpix2Cartesian(pastHpix)
-    nowCart = hpix2Cartesian(nowHpix)
-
-    """ Print out the cartesian maps for debugging"""
-    maxPix = max(np.max(pastCart), np.max(nowCart))
-    maxPix = 10000
-    fig1 = plt.figure("pastCart")
-    pylab.imshow(pastCart, vmax = maxPix, cmap=plt.cm.jet)
-    plt.colorbar()
-    fig2 = plt.figure("nowCart")
-    pylab.imshow(nowCart, vmax = maxPix, cmap=plt.cm.jet)
-    plt.colorbar()
-    """"""
+    pastCart = cartesianSky.fromHpix(pastHpix)
+    #pastCart.plot(pastCart.max(), "past")
+    #pastCart.translate(np.array([0,20])).plot(pastCart.max(), "trans")
+    #plt.show()
+    nowCart = cartesianSky.fromHpix(nowHpix)
 
     pool = Pool(len(dirs))
     
@@ -117,10 +88,8 @@ def predClouds(pastHpix, nowHpix, numSecs):
         # the two have been offset from each other by many directions
         # around the current overallTrans
         testDirs = [overallTrans + direction for direction in dirs]
-
         args = [(nowCart, pastCart, testDir) for testDir in testDirs]
         rmses = pool.map(calcRmse, args)
-        #rmses = [calcRmse(nowCart, pastCart, testDir) for testDir in testDirs]
         
         # figure out which direction yields the smallest rmse
         minDirId = np.argmin(rmses)
@@ -128,14 +97,16 @@ def predClouds(pastHpix, nowHpix, numSecs):
         minRmse = rmses[minDirId]
 
         # if translating nowCart in all directions yields an increase in
-        # mse, then we've found the (local) minimum of mse so we're done
+        # mse, then we've found a minimum of rmse. Keep track of local minima
+        # so if we hit one enough times we can declare that we're done.
+
         # TODO it might improve the search to start at
         # some temperature and then gradually lower the temp over time
         if stationaryRmse <= minRmse:
             localMinimaNumVisits[tuple(overallTrans)] += 1
             # if we've revisited this minimum enough times then it's
             # probably a pretty stable minimum
-            if localMinimaNumVisits[tuple(overallTrans)] > 5:
+            if localMinimaNumVisits[tuple(overallTrans)] > 1:
                 break
         
         # now probabilistically choose a direction based on how close its
@@ -155,50 +126,19 @@ def predClouds(pastHpix, nowHpix, numSecs):
     # also multiply by -1 because overallTrans is in the wrong direction
     scaleFactor = numSecs / (5 * 60.0)
     predTrans = -1 * np.round(overallTrans * scaleFactor).astype(int)
-    predCart = translateCart(nowCart, predTrans)
+    predCart = nowCart.translate(predTrans)
 
-    """ Print out predCart for debugging"""
-    translatedPastCart = translateCart(pastCart, -1 * overallTrans)
-    fig3 = plt.figure("translated past cart")
-    pylab.imshow(translatedPastCart, vmax=10000, cmap = plt.cm.jet)
-    plt.colorbar()
-    fig4 = plt.figure("predCartInPred")
-    pylab.imshow(predCart, vmax = 10000, cmap = plt.cm.jet)
-    plt.colorbar()
+    """ Print out the cartesian maps for debugging"""
+    translatedPastCart = pastCart.translate(-1 * overallTrans)
+    maxPix = max(pastCart.max(), nowCart.max(),
+                 translatedPastCart.max(), predCart.max()) 
+    pastCart.plot(maxPix, "pastCart")
+    nowCart.plot(maxPix, "nowCart")
+    translatedPastCart.plot(maxPix, "translatedPastCart")
+    predCart.plot(maxPix, "predCart")
     """"""
 
-    return cartesian2Hpix(predCart)
-
-def translateCart(cart, direction):
-    """ Translate the passed-in cartesian map in the specified direction
-
-    @returns    the translated map
-    @param      cart: the input map
-    @param      direction: a list [y,x] of the direction to translate cart by
-    """
-    # translate the array by padding it with zeros and then cropping off the
-    # extra numbers
-    if direction[0] >= 0:
-        padY = (direction[0], 0)
-    else:
-        padY = (0, -1 * direction[0])
-    if direction[1] >= 0:
-        padX = (direction[1], 0)
-    else:
-        padX = (0, -1 * direction[1])
-
-    paddedCart = np.pad(cart, (padY, padX), mode="constant")
-
-    # now crop the image to the original size
-    cropY = (padY[1], paddedCart.shape[0] - padY[0])
-    cropX = (padX[1], paddedCart.shape[1] - padX[0])
-    translatedCart = paddedCart[cropY[0]:cropY[1],cropX[0]:cropX[1]]
-
-    # np.roll translates with wrap around but we probably don't want this
-    #translatedCart = np.roll(cart, direction[0], axis=0)
-    #translatedCart = np.roll(translatedCart, direction[1], axis=1)
-
-    return translatedCart
+    return cartesianSky.toHpix(predCart)
 
 def calcRmse((cart1, cart2, direction)):
     """ Calculate the rmse between cart1 and cart2 when cart2 is shifted by dir
@@ -207,19 +147,13 @@ def calcRmse((cart1, cart2, direction)):
     @param      cart1: the stationary map
     @param      cart2: the map which is shifted
     @param      direction: a list [y,x] specifying the direction to translate
-    @throws     ValueError if cart1 and cart2 are different shapes or if
-                they are not squares or if there are unseen pixels (=-1) inside
-                of rMax
+    @throws     TypeError if cart1 and cart2 are invalid CartesianSky instances
     """
-    if cart1.shape != cart2.shape:
-        raise ValueError("cart1 and cart2 must have the same shape")
 
-    (yMax, xMax) = cart1.shape
-
-    # We assume that the maps are squares with the signal in inscribed
-    # circles. This conforms with the output of hpix2Cartesian()
-    if yMax != xMax:
-        raise ValueError("the passed in maps must be square")
+    if not isinstance(cart1, CartesianSky):
+        raise TypeError("cart1 must be a CartesianSky object")
+    if not isinstance(cart2, CartesianSky):
+        raise TypeError("cart2 must be a CartesianSky object")
 
     # Only loop over the pixels which overlap after shifting cart2
     """
@@ -248,109 +182,36 @@ def calcRmse((cart1, cart2, direction)):
     |         |  cart2
     ----------- 
     """
+
+    xyMax = cartesianSky.xyMax
+
     yStart = max(0, direction[0])
     xStart = max(0, direction[1])
-    yEnd = min(yMax, yMax + direction[0])
-    xEnd = min(xMax, xMax + direction[1])
+    yEnd = min(xyMax, xyMax + direction[0])
+    xEnd = min(xyMax, xyMax + direction[1])
 
     ySign = np.sign(direction[0])
     xSign = np.sign(direction[1])
 
     mse = 0
     numPix = 0
-
-    #print(direction)
     for y in range(yStart, yEnd, 2):
-        #print("\n", end="")
         for x in range(xStart, xEnd, 2):
             yOff = y - ySign * direction[0]
             xOff = x - xSign * direction[1]
-
-            # don't count this pixel if it's outside rMax on either the
-            # stationary or the translated maps
-            if np.sqrt((y - xyCent)**2 + (x - xyCent)**2) > rMax:
-                #print("x", end="")
+            
+            # ignore pixels which are not valid for both maps
+            if not cart1.isPixelValid([y,x]):
                 continue
-            if np.sqrt((yOff - xyCent)**2 + (xOff - xyCent)**2) > rMax:
-                #print("X", end="")
+            if not cart2.isPixelValid([yOff,xOff]):
                 continue
-            #print("o", end="")
 
-            if cart1[y,x] == -1 or cart2[yOff,xOff] == -1:
-                raise ValueError("there must be no unseen pixels within rMax")
+            # TODO does this belong here?
+            #if cart1[y,x] == -1 or cart2[yOff,xOff] == -1:
+            #    raise ValueError("there must be no unseen valid pixels")
 
             mse += (cart1[y,x] - cart2[yOff,xOff])**2
             numPix += 1
-    #print("\n")
     mse /= numPix
     return np.sqrt(mse)
 
-def hpix2Cartesian(hpix):
-    """ Convert a healpix image to a cartesian cloud map
-
-    @returns    a square cartesian map with the signal in an inscribed circle
-    @param      hpix: the healpix to be converted
-
-    The top plane in the crude picture below is the cartesian plane
-    where the clouds live. The dome is the healpix that we're 
-    looking "through" to see the clouds
-    _________________
-         /   \
-        |  o  |
-
-    To find out which healpix pixel corresponds to (x,y), we convert 
-    (x,y) to (r,phi). Then, we figure out which theta corresponds to
-    the calculated r.
-    """
-
-    # now for each (x,y), sample the corresponding hpix pixel
-    # see fits2Hpix() for an explanation of x, y, and cart
-    x = np.repeat([np.arange(-xyCent, xyCent)], xyMax, axis=0).T
-    y = np.repeat([np.arange(-xyCent, xyCent)], xyMax, axis=0)
-    cart = np.swapaxes([y,x],0,2)
-    
-    # calculate theta and phi of each pixel in the cartesian map
-    r = np.linalg.norm(cart, axis=2) 
-    phi = np.arctan2(y, x).T
-    theta = np.arctan(r / z)
-
-    # ipixes is an array of pixel indices corresponding to theta and phi
-    ipixes = hp.ang2pix(nside, theta, phi)
-
-    # move back from physical coordinates to array indices
-    y += xyCent
-    x += xyCent
-    y = y.astype(int) 
-    x = x.astype(int)
-
-    # set the sky pixels to the corresponding hpix pixel
-    sky = np.zeros((xyMax, xyMax))
-    sky[y.flatten(),x.flatten()] = hpix[ipixes.flatten()]
-    sky[sky == 0] = np.median(sky)
-
-    return sky
-
-def cartesian2Hpix(cart):
-    """ Convert a cartesian cloud map to a healpix image
-
-    @returns    a healpix image of the clouds
-    @param      cart: a cartesian map of the clouds
-    
-    For each pixel in hpix, sample from the corresponding pixel in cart
-    """
-
-    hpix = np.zeros(npix)
-    (theta, phi) = hp.pix2ang(nside, np.arange(npix))
-
-    r = np.tan(theta) * z
-    x = np.floor(r * np.cos(phi)).astype(int)
-    y = np.floor(r * np.sin(phi)).astype(int)
-    
-    # ignore all pixels with zenith angle higher than thetaMax
-    x = x[theta < thetaMax]
-    y = y[theta < thetaMax]
-    ipixes = np.arange(npix)[theta < thetaMax]
-
-    hpix[ipixes] = cart[x + xyCent, y + xyCent]
-
-    return hpix
