@@ -47,11 +47,32 @@ class CartesianSky:
     isPixelValid(point):    return whether point is part of the sky map
     getSunPos():            find the sun in this sky map
     translate(direction):   translate the map in some direction
+    __getitem__((y,x)):     allows for syntax like cart[y,x]
+    plot(maxPixel, title):  plot the map
+    max():                  calculate the maximum pixel value
+    std():                  calculate the std dev of the valid pixels
+    mean():                 calculate the mean of the valid pixels
     """
 
     def __init__(self, cart, sunPos = None):
+        """ Initialize the CartesianSky
+
+        @returns    void
+        @param      cart: a np.array with the cloud cover pixel values
+        @param      sunPos (optional): the position of the sun in the image
+                    If not passed in, it will be calculated
+        @throws     ValueError if cart has the wrong shape or sunPos is
+                    outside of the image
+
+        Calculates the sun position if none is passed in and then calculates
+        the valid mask for the sky map.
+
+        """
         if cart.shape != (xyMax, xyMax):
             raise ValueError("the passed in map has the wrong shape")
+        if sunPos is not None and (sunPos[0] < 0 or sunPos[1] < 0 or
+                                   sunPos[0] > xyMax or sunPos[1] > xyMax):
+            raise ValueError("the passed-in sunPos is invalid")
 
         self.cart = cart
         # allow the caller to pass in a sunPos if it's already known
@@ -67,9 +88,22 @@ class CartesianSky:
         self.cart[np.logical_not(self.validMask)] = -1
 
     def isPixelValid(self, point):
-        # a pixel is invalid if it's outside of rMax or too close to the sun
+        """ Return whether the pixel is a valid part of the sky map
+
+        @returns    True if the pixel is valid, False otherwise
+        @param      point: the pixel in question
+        @throws     ValueError if point is outside the image
+
+        A pixel is invalid if it's outside of rMax or too close to the sun.
+        """
+        if point[0] < 0 or point[1] < 0 or point[0] > xyMax or point[1] > xyMax:
+            raise ValueError("the supplied point is outside the sky map")
+
         point = np.array(point)
         center = np.array([xyCent,xyCent])
+
+        # return False if the pixel is farther than rMax from the center
+        # or if it is closer than sunAvoidRadius from the sun
         if np.linalg.norm(point - center) > rMax:
             return False
         if np.linalg.norm(point - self.sunPos) < sunAvoidRadius:
@@ -78,16 +112,26 @@ class CartesianSky:
         return True
 
     def __getitem__(self, args):
+        # given a CartesianSky object cart, this method allows other
+        # code to use cart[y,x] instead of having to do cart.cart[y,x]
+        # which would breach abstraction anyway
         (y, x) = args
         return self.cart[y,x]
 
     def getSunPos(self):
+        """ Find the position of the sun in the image
+    
+        @returns    a point [y,x] indicating the sun's position in self.cart
+        
+        This method smooths out the sky map and then finds the maximum
+        pixel value in the smoothed image. If the smoothed image has
+        multiple pixels which share the same maximum, this chooses
+        the first such pixel.
+        """
         # average the image to find the sun
         n = 5
         k = np.ones((n,n)) / n**2
         avg = convolve2d(self.cart, k, mode="same")
-        #plt.figure("avg")
-        #pylab.imshow(avg, vmax=9700, cmap=plt.cm.jet)
 
         sunPos = np.unravel_index(avg.argmax(), avg.shape)
         return sunPos
@@ -197,17 +241,7 @@ def fromHpix(hpix):
 
     maxPix = np.max(sky)
 
-    #fig = plt.figure()
-    #pylab.imshow(sky, vmax = maxPix)
-    #plt.colorbar()
-
-    #cart = CartesianSky(sky)
-    #cart.plot(maxPix)
-
-    #plt.show()
-
     return CartesianSky(sky)
-    #return cart
 
 def toHpix(cart):
     """ Convert a cartesian cloud map to a healpix image
