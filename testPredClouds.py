@@ -87,7 +87,8 @@ if __name__ == "__main__":
     #filename2 = "fits/ut042816.daycal.0980.fits"
     
     # these are files Chris put in /data/allsky/ut111515
-    dataDir = "/home/drothchild/data/allsky/ut111515/"
+    # dataDir = "/home/drothchild/data/allsky/ut111515/"
+    dataDir = ""
     filePrefix = "ut111515.daycal."
     filePostfix = ".fits"
     def getFilename(filenum):
@@ -122,39 +123,27 @@ if __name__ == "__main__":
     # cloudyThreshold would presumably be determined by the tolerance
     # LSST has for looking through clouds
     cloudyThreshold = 1000 
-    numPix = 0
-    numPredCloudyPix = 0
-    numFutureCloudyPix = 0
-    numPredAndFutureCloudyPix = 0
-    numPredClearAndFutureCloudyPix = 0
-    numPredCloudyAndFutureClearPix = 0
-    for y in range(cartesianSky.xyMax):
-        for x in range(cartesianSky.xyMax):
-            if (not predCart.isPixelValid([y,x]) or
-                not futureCart.isPixelValid([y,x])):
-                continue
-            isPredCloudy = predCart[y,x] > cloudyThreshold
-            isFutureCloudy = futureCart[y,x] > cloudyThreshold
 
-            numPix += 1 
-            if isPredCloudy:  
-                numPredCloudyPix += 1
-            if isFutureCloudy:
-                numFutureCloudyPix += 1
-            if isPredCloudy and isFutureCloudy:
-                numPredAndFutureCloudyPix += 1
-            if not isPredCloudy and isFutureCloudy:
-                numPredClearAndFutureCloudyPix += 1
-            if isPredCloudy and not isFutureCloudy:
-                numPredCloudyAndFutureClearPix += 1
+    numFutureCloudy = np.size(np.where(futureCart.cart > cloudyThreshold)[0])
+    numFutureClear = np.size(np.where(futureCart.cart < cloudyThreshold)[0])
+    fracCloudyandCloudy = np.size(np.where((predCart.cart > cloudyThreshold) &
+                                           (futureCart.cart > cloudyThreshold))[0])/float(numFutureCloudy)
     print("Of the pixels which turned out to be cloudy, ",
-          numPredAndFutureCloudyPix / numFutureCloudyPix * 100,
+          fracCloudyandCloudy * 100,
           "percent of them were predicted to be cloudy.")
+
+    fracPredClearAndFutureCloudy = np.size(np.where((predCart.cart < cloudyThreshold) & 
+                                           (futureCart.cart > cloudyThreshold))[0]) / float(numFutureCloudy)
     print("Of the pixels which turned out to be cloudy,",
-          numPredClearAndFutureCloudyPix / numFutureCloudyPix * 100,
+          fracPredClearAndFutureCloudy * 100,
           "percent of them were predicted to be clear.")
+
+    fracPredCloudyAndFutureClear = np.size(np.where((predCart.cart > cloudyThreshold) &
+                                                    (futureCart.cart < cloudyThreshold) )[0]) / float(numFutureClear)
+
     print("Of the pixels which turned out to be clear,",
-          numPredCloudyAndFutureClearPix / (numPix - numFutureCloudyPix) * 100,
+          fracPredCloudyAndFutureClear * 100,
           "percent of them were predicted to be cloudy.")
+
 
     plt.show()

@@ -97,7 +97,8 @@ class CartesianSky:
         A pixel is invalid if it's outside of rMax or too close to the sun.
         """
         if point[0] < 0 or point[1] < 0 or point[0] > xyMax or point[1] > xyMax:
-            raise ValueError("the supplied point is outside the sky map")
+            return False
+            # raise ValueError("the supplied point is outside the sky map")
 
         point = np.array(point)
         center = np.array([xyCent,xyCent])
