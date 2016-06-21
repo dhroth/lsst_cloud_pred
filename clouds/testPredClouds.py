@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 
 from predClouds import predClouds
-import cartesianSky
-from cartesianSky import CartesianSky
+import cloudMap
+from cloudMap import CloudMap
 
 from astropy.io import fits
 
@@ -73,11 +73,11 @@ def fits2Hpix(fits):
 
     b -= bias
 
-    b[theta > cartesianSky.thetaMax] = -1
+    b[theta > cloudMap.thetaMax] = -1
 
     # the blue probably has the most information, so ignore r and g
-    hpix = np.zeros(cartesianSky.npix)
-    hpix[hp.ang2pix(cartesianSky.nside, theta, phi)] = b
+    hpix = np.zeros(cloudMap.npix)
+    hpix[hp.ang2pix(cloudMap.nside, theta, phi)] = b
     
     return hpix
 
@@ -102,20 +102,20 @@ if __name__ == "__main__":
     futureHpix = fits2Hpix(fits.open(futureFilename)[0].data)
 
     # convert the two healpix maps to cartesian maps
-    pastCart   = cartesianSky.fromHpix(pastHpix)
-    nowCart    = cartesianSky.fromHpix(nowHpix)
-    futureCart = cartesianSky.fromHpix(futureHpix)
+    pastMap   = cloudMap.fromHpix(pastHpix)
+    nowMap    = cloudMap.fromHpix(nowHpix)
+    futureMap = cloudMap.fromHpix(futureHpix)
 
     # run the prediction 
-    predCart = predClouds(pastCart, nowCart, 5 * 60)
+    predMap = predClouds(pastMap, nowMap, 5 * 60)
 
-    maxPix = max(pastCart.max(), nowCart.max(), 
-                 predCart.max(), futureCart.max())
+    maxPix = max(pastMap.max(), nowMap.max(), 
+                 predMap.max(), futureMap.max())
 
-    pastCart.plot(maxPix, "past")
-    nowCart.plot(maxPix, "now")
-    predCart.plot(maxPix, "pred")
-    futureCart.plot(maxPix, "future")
+    pastMap.plot(maxPix, "past")
+    nowMap.plot(maxPix, "now")
+    predMap.plot(maxPix, "pred")
+    futureMap.plot(maxPix, "future")
 
     # calculate various forms of accuracy
 
@@ -128,13 +128,13 @@ if __name__ == "__main__":
     numPredAndFutureCloudyPix = 0
     numPredClearAndFutureCloudyPix = 0
     numPredCloudyAndFutureClearPix = 0
-    for y in range(cartesianSky.xyMax):
-        for x in range(cartesianSky.xyMax):
-            if (not predCart.isPixelValid([y,x]) or
-                not futureCart.isPixelValid([y,x])):
+    for y in range(cloudMap.xyMax):
+        for x in range(cloudMap.xyMax):
+            if (not predMap.isPixelValid([y,x]) or
+                not futureMap.isPixelValid([y,x])):
                 continue
-            isPredCloudy = predCart[y,x] > cloudyThreshold
-            isFutureCloudy = futureCart[y,x] > cloudyThreshold
+            isPredCloudy = predMap[y,x] > cloudyThreshold
+            isFutureCloudy = futureMap[y,x] > cloudyThreshold
 
             numPix += 1 
             if isPredCloudy:  
