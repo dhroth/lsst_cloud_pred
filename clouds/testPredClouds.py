@@ -87,7 +87,7 @@ if __name__ == "__main__":
     #filename2 = "fits/ut042816.daycal.0980.fits"
     
     # these are files Chris put in /data/allsky/ut111515
-    dataDir = "/home/drothchild/data/allsky/ut111515/"
+    dataDir = "./"
     filePrefix = "ut111515.daycal."
     filePostfix = ".fits"
     def getFilename(filenum):
