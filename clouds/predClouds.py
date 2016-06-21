@@ -62,7 +62,6 @@ def predClouds(pastMap, nowMap, numSecs):
         raise TypeError("nowMap must be a CloudMap instance")
 
     pool = Pool(len(dirs))
-    pool = Pool(1)
     
     # overallTrans is the translation necessary to translate
     # pastMap into nowMap (or at least get as close as possible)
@@ -117,7 +116,7 @@ def predClouds(pastMap, nowMap, numSecs):
     # the translation needed to transform nowMap into predMap
     # also multiply by -1 because overallTrans is in the wrong direction
     scaleFactor = 1 / (5 * 60.0)
-    predTrans = -1 * np.round(overallTrans * scaleFactor).astype(int)
+    predTrans = -1 * overallTrans * scaleFactor
     predMap = nowMap.transform(CloudState(predTrans), numSecs)
 
     """ Print out the cartesian maps for debugging
@@ -182,15 +181,12 @@ def calcRmse((map1, map2, direction)):
     yEnd = min(xyMax, xyMax + direction[0])
     xEnd = min(xyMax, xyMax + direction[1])
 
-    ySign = np.sign(direction[0])
-    xSign = np.sign(direction[1])
-
     mse = 0
     numPix = 0
     for y in range(yStart, yEnd, 2):
         for x in range(xStart, xEnd, 2):
-            yOff = y - ySign * direction[0]
-            xOff = x - xSign * direction[1]
+            yOff = y - direction[0]
+            xOff = x - direction[1]
             
             # ignore pixels which are not valid for both maps
             if not map1.isPixelValid([y,x]):

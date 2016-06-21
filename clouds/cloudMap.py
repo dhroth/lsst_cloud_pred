@@ -99,7 +99,8 @@ class CloudMap:
         """
         #print(point)
         if point[0] < 0 or point[1] < 0 or point[0] > xyMax or point[1] > xyMax:
-            raise ValueError("the supplied point is outside the sky map")
+            raise ValueError("the supplied point:", point, 
+                             "is outside the sky map")
 
         point = np.array(point)
         center = np.array([xyCent,xyCent])
@@ -154,7 +155,7 @@ class CloudMap:
         @param      direction: the direction [y,x] to translate by
         """
         
-        direction = cloudState.v * time
+        direction = np.round(cloudState.v * time).astype(int)
 
         # translate the array by padding it with zeros and then cropping off the
         # extra numbers
