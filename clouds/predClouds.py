@@ -112,11 +112,10 @@ def predClouds(pastMap, nowMap, numSecs):
     pool.close()
     pool.join()
 
-    # now multiply overallTrans by numSecs / (5 minutes) to get
+    # TODO need to reframe in terms of velocities
+    # now divide overallTrans by 5 minutes to get
     # the translation needed to transform nowMap into predMap
-    # also multiply by -1 because overallTrans is in the wrong direction
-    scaleFactor = 1 / (5 * 60.0)
-    predTrans = -1 * overallTrans * scaleFactor
+    predTrans = overallTrans / (5 * 60)
     predMap = nowMap.transform(CloudState(predTrans), numSecs)
 
     """ Print out the cartesian maps for debugging
