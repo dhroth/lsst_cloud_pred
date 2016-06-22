@@ -122,6 +122,10 @@ class CloudMap:
         # which would breach abstraction anyway
         (y,x) = args
         return self.cloudData[y,x]
+    
+    def hash(self):
+        self.cloudData.flags.writeable = False
+        return hash(self.cloudData.data)
 
     # Comparison methods, allowing for syntax like map1 > map2
     # and map3 <= 100

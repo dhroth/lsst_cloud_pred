@@ -10,11 +10,14 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from scipy.optimize import minimize
 
+import time
+
 class CloudServer:
 
     def __init__(self, maxCachedMaps=8):
         self.maxCachedMaps = maxCachedMaps
         self.cachedMaps = []
+        self._cachedRmses = {}
 
     def _calculateCloudState(self, map1, map2, deltaT):
         """ Find the cloud state using two closely-spaced CloudMap objects
@@ -40,8 +43,12 @@ class CloudServer:
 
         # TODO
         # the parameters are vy and vx
-        initialGuess = np.array([20,20])
-        result = minimize(self._calcRmse, initialGuess, args=(map1, map2))
+        initialGuess = np.array([0,0])
+        result = minimize(self._calcRmse, 
+                          initialGuess, 
+                          method="CG",
+                          options={"eps":1},
+                          args=(map1, map2))
         # TODO check result.success
         cloudVelocity = result.x / deltaT
 
@@ -78,7 +85,6 @@ class CloudServer:
         vxs = [cachedMap.cloudState.vel[1] for cachedMap in self.cachedMaps[1:]]
         
         v = [np.median(vys), np.median(vxs)]
-        print("found velocity ", v)
         predMap = latestMap.transform(CloudState(vel=v), mjd - latestMjd)
         return predMap
 
@@ -105,6 +111,13 @@ class CloudServer:
         # some more
         velocity = np.array(velocity) # just in case
         direction = np.round(velocity).astype(int)
+
+        # check if we've already calculated this rmse:
+        map1Hash = map1.hash()
+        map2Hash = map2.hash()
+        directionHash = hash(tuple(direction))
+        if (directionHash, map1Hash, map2Hash) in self._cachedRmses:
+            return self._cachedRmses[(directionHash, map1Hash, map2Hash)]
 
         # Only loop over the pixels which overlap after shifting map2
         """
@@ -143,8 +156,8 @@ class CloudServer:
 
         mse = 0
         numPix = 0
-        for y in range(yStart, yEnd, 3):
-            for x in range(xStart, xEnd, 3):
+        for y in range(yStart, yEnd, 2):
+            for x in range(xStart, xEnd, 2):
                 yOff = y - direction[0]
                 xOff = x - direction[1]
                 
@@ -161,7 +174,11 @@ class CloudServer:
                 mse += (map1[y,x] - map2[yOff,xOff])**2
                 numPix += 1
         mse /= numPix
-        return np.sqrt(mse)
+        rmse = np.sqrt(mse)
+
+        # cache so we don't recompute
+        self._cachedRmses[(directionHash, map1Hash, map2Hash)] = rmse
+        return rmse
 
 class CachedMap:
     def __init__(self, mjd, cloudMap, cloudState = None):
