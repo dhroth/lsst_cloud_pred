@@ -88,6 +88,7 @@ if __name__ == "__main__":
     
     # these are files Chris put in /data/allsky/ut111515
     dataDir = "./"
+    # dataDir = "/home/drothchild/data/allsky/ut111515/"
     filePrefix = "ut111515.daycal."
     filePostfix = ".fits"
     def getFilename(filenum):
@@ -122,39 +123,31 @@ if __name__ == "__main__":
     # cloudyThreshold would presumably be determined by the tolerance
     # LSST has for looking through clouds
     cloudyThreshold = 1000 
-    numPix = 0
-    numPredCloudyPix = 0
-    numFutureCloudyPix = 0
-    numPredAndFutureCloudyPix = 0
-    numPredClearAndFutureCloudyPix = 0
-    numPredCloudyAndFutureClearPix = 0
-    for y in range(cloudMap.xyMax):
-        for x in range(cloudMap.xyMax):
-            if (not predMap.isPixelValid([y,x]) or
-                not futureMap.isPixelValid([y,x])):
-                continue
-            isPredCloudy = predMap[y,x] > cloudyThreshold
-            isFutureCloudy = futureMap[y,x] > cloudyThreshold
+    numFutureCloudy = np.size(np.where(futureMap > cloudyThreshold)[0])
+    numFutureClear  = np.size(np.where(futureMap < cloudyThreshold)[0])
 
-            numPix += 1 
-            if isPredCloudy:  
-                numPredCloudyPix += 1
-            if isFutureCloudy:
-                numFutureCloudyPix += 1
-            if isPredCloudy and isFutureCloudy:
-                numPredAndFutureCloudyPix += 1
-            if not isPredCloudy and isFutureCloudy:
-                numPredClearAndFutureCloudyPix += 1
-            if isPredCloudy and not isFutureCloudy:
-                numPredCloudyAndFutureClearPix += 1
+    fracCloudyandCloudy = np.size(
+        np.where((predMap > cloudyThreshold) & (futureMap > cloudyThreshold))[0]
+    ) / numFutureCloudy
+
     print("Of the pixels which turned out to be cloudy, ",
-          numPredAndFutureCloudyPix / numFutureCloudyPix * 100,
+          fracCloudyandCloudy * 100,
           "percent of them were predicted to be cloudy.")
+
+    fracPredClearAndFutureCloudy = np.size(
+        np.where((predMap < cloudyThreshold) & (futureMap > cloudyThreshold))[0]
+    ) / numFutureCloudy
+
     print("Of the pixels which turned out to be cloudy,",
-          numPredClearAndFutureCloudyPix / numFutureCloudyPix * 100,
+          fracPredClearAndFutureCloudy * 100,
           "percent of them were predicted to be clear.")
+
+    fracPredCloudyAndFutureClear = np.size(
+        np.where((predMap > cloudyThreshold) & (futureMap < cloudyThreshold))[0]
+    ) / numFutureClear
+
     print("Of the pixels which turned out to be clear,",
-          numPredCloudyAndFutureClearPix / (numPix - numFutureCloudyPix) * 100,
+          fracPredCloudyAndFutureClear * 100,
           "percent of them were predicted to be cloudy.")
 
     plt.show()

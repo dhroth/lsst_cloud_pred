@@ -49,6 +49,8 @@ class CloudMap:
     transform(cS, time):    transform the cloud map according to cloud state
                             cS over a duration time
     __getitem__((y,x)):     allows for syntax like cloudMap[y,x]
+    __eq__(self, other):    allows for syntax like map == m5threshold
+    other magic cmp methods...
     plot(maxPixel, title):  plot the cloud map
     max():                  calculate the maximum pixel value
     std():                  calculate the std dev of the valid pixels
@@ -71,8 +73,8 @@ class CloudMap:
         """
         if cloudData.shape != (xyMax, xyMax):
             raise ValueError("the passed in cloud data has the wrong shape")
-        if sunPos is not None and (sunPos[0] < 0 or sunPos[1] < 0 or
-                                   sunPos[0] > xyMax or sunPos[1] > xyMax):
+        if sunPos is not None and (sunPos[0] < 0 or sunPos[0] > xyMax or
+                                   sunPos[1] < 0 or sunPos[1] > xyMax):
             raise ValueError("the passed-in sunPos is invalid")
 
         self.cloudData = cloudData
@@ -120,6 +122,45 @@ class CloudMap:
         # which would breach abstraction anyway
         (y,x) = args
         return self.cloudData[y,x]
+
+    # Comparison methods, allowing for syntax like map1 > map2
+    # and map3 <= 100
+
+    def __eq__(self, other): 
+        if isinstance(other, CloudMap):
+            return self.cloudData.__eq__(other.cloudData)
+        else:
+            return self.cloudData.__eq__(other)
+
+    def __ne__(self, other): 
+        if isinstance(other, CloudMap):
+            return self.cloudData.__ne__(other.cloudData)
+        else:
+            return self.cloudData.__ne__(other)
+
+    def __lt__(self, other): 
+        if isinstance(other, CloudMap):
+            return self.cloudData.__lt__(other.cloudData)
+        else:
+            return self.cloudData.__lt__(other)
+
+    def __gt__(self, other): 
+        if isinstance(other, CloudMap):
+            return self.cloudData.__gt__(other.cloudData)
+        else:
+            return self.cloudData.__gt__(other)
+
+    def __le__(self, other): 
+        if isinstance(other, CloudMap):
+            return self.cloudData.__le__(other.cloudData)
+        else:
+            return self.cloudData.__le__(other)
+
+    def __ge__(self, other): 
+        if isinstance(other, CloudMap):
+            return self.cloudData.__ge__(other.cloudData)
+        else:
+            return self.cloudData.__ge__(other)
 
     def getSunPos(self):
         """ Find the position of the sun in the image
