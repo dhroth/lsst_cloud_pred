@@ -221,14 +221,9 @@ class CloudMap:
         transformedData = paddedData[cropY[0]:cropY[1],cropX[0]:cropX[1]]
 
         # replace all pixels which are -1 with the value they used to be
-        for y in range(xyMax):
-            for x in range(xyMax):
-                if transformedData[y,x] == -1:
-                    # note that this unnecessarily "replaces" invalid pixels 
-                    # which are correctly set to -1 with self.cloudData[y,x], 
-                    # which is also set to -1. This is probably cheaper than
-                    # checking each pixel to see if it's valid.
-                    transformedData[y,x] = self.cloudData[y,x]
+        (invalidY, invalidX) = np.where((transformedData == -1) &
+                                        (self.cloudData  != -1))
+        transformedData[invalidY,invalidX] = self.cloudData[invalidY,invalidX]
 
         # np.roll translates with wrap around but we probably don't want this
         #translatedCart = np.roll(cart, direction[0], axis=0)
