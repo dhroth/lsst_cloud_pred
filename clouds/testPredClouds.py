@@ -6,7 +6,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 
-from predClouds import predClouds
+from cloudServer import CloudServer
 import cloudMap
 from cloudMap import CloudMap
 
@@ -107,8 +107,14 @@ if __name__ == "__main__":
     nowMap    = cloudMap.fromHpix(nowHpix)
     futureMap = cloudMap.fromHpix(futureHpix)
 
+    # TODO do not this
+    # start a CloudServer and post the maps to the server
+    cloudServer = CloudServer()
+    cloudServer.postCloudMap(0, pastMap)
+    cloudServer.postCloudMap(5 * 60, nowMap)
+
     # run the prediction 
-    predMap = predClouds(pastMap, nowMap, 5 * 60)
+    predMap = cloudServer.predCloudMap(2 * 5 * 60)
 
     maxPix = max(pastMap.max(), nowMap.max(), 
                  predMap.max(), futureMap.max())

@@ -193,10 +193,11 @@ class CloudMap:
         the value of the old pixel.
 
         @returns    the translated map
-        @param      direction: the direction [y,x] to translate by
+        @param      cloudState: the CloudState for the transformation
+        @param      time: the amount of time to propagate cloudState through
         """
         
-        direction = np.round(cloudState.v * time).astype(int)
+        direction = np.round(np.array(cloudState.vel) * time).astype(int)
 
         # translate the array by padding it with zeros and then cropping off the
         # extra numbers
