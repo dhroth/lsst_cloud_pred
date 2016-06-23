@@ -75,7 +75,10 @@ class CloudMap:
             raise ValueError("the passed in cloud data has the wrong shape")
         if sunPos is not None and (sunPos[0] < 0 or sunPos[0] > xyMax or
                                    sunPos[1] < 0 or sunPos[1] > xyMax):
-            raise ValueError("the passed-in sunPos is invalid")
+            #raise ValueError
+            print("the passed-in sunPos is invalid:", sunPos)
+            # TODO hack
+            sunPos = None
 
         self.cloudData = cloudData
         # allow the caller to pass in a sunPos if it's already known
@@ -99,7 +102,6 @@ class CloudMap:
 
         A pixel is invalid if it's outside of rMax or too close to the sun.
         """
-        #print(point)
         if point[0] < 0 or point[1] < 0 or point[0] > xyMax or point[1] > xyMax:
             raise ValueError("the supplied point:", point, 
                              "is outside the sky map")

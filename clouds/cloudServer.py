@@ -9,14 +9,19 @@ from cloudState import CloudState
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from scipy.optimize import minimize
+from scipy.interpolate import RectBivariateSpline
 
 import time
 
 class CloudServer:
 
-    def __init__(self, maxCachedMaps=8):
-        self.maxCachedMaps = maxCachedMaps
-        self.cachedMaps = []
+    def __init__(self):
+        # throw out stale cloud maps once we reach more than this many
+        self._MAX_CACHED_MAPS = 20
+        # calculate velocity vectors between frames this far apart
+        self._NUM_VEL_CALC_FRAMES = 10
+
+        self._cachedMaps = []
         self._cachedRmses = {}
 
     def _calculateCloudState(self, map1, map2, deltaT):
@@ -29,8 +34,8 @@ class CloudServer:
         @returns    A best guess of the current dynamical CloudState
         @param      map1: a CloudMap of the clouds at some time
         @param      map2: a CloudMap of the clouds at a time deltaT after map1
-        @param      deltaT: the number of seconds separating map1 and map2
-        @throws     ValueError if deltaT < 0
+        @param      deltaT: the difference in mjd between map1 and map2
+        @throws     ValueError if deltaT <= 0
         @throws     TypeError if map1 or map2 are not CloudMap objects
         """
 
@@ -43,52 +48,90 @@ class CloudServer:
 
         # TODO
         # the parameters are vy and vx
-        initialGuess = np.array([0,0])
-        result = minimize(self._calcRmse, 
+        initialGuess = np.array([5,5])
+        result = minimize(self._calcInterpolatedRmse, 
                           initialGuess, 
                           method="CG",
                           options={"eps":1},
                           args=(map1, map2))
         # TODO check result.success
-        cloudVelocity = result.x / deltaT
-
+        # calcRmse moves map2 around to make it look like map1. Since map2 is
+        # from a time later than map1, that means that if, for example, you have
+        # to move map2 down to make it look like map1, then the clouds moved up
+        # between map1 and map2. Therefore we need the minus sign here
+        cloudVelocity = -1 * result.x / deltaT
+        print("result of minimize:", cloudVelocity)
         return CloudState(vel=cloudVelocity)
 
     def postCloudMap(self, mjd, cloudMap):
-        if len(self.cachedMaps) > 0:
-            if mjd <= self.cachedMaps[-1].mjd:
+        """ Notify CloudServer that a new cloud map is available
+
+        @returns    void
+        @param      mjd: the time the image was taken
+        @param      cloudMap: the cloud cover map
+        @throws     ValueError if the caller attempts to post cloud maps
+                    out of chronological order
+        """
+
+        if len(self._cachedMaps) > 0:
+            if mjd <= self._cachedMaps[-1].mjd:
                 raise ValueError("cloud maps must be posted in order of mjd")
-        self.cachedMaps.append(CachedMap(mjd, cloudMap))
-        if len(self.cachedMaps) > self.maxCachedMaps:
-            self.cachedMaps.pop(0)
+
+        self._cachedMaps.append(CachedMap(mjd, cloudMap))
+        if len(self._cachedMaps) > self._MAX_CACHED_MAPS:
+            self._cachedMaps.pop(0)
 
     def predCloudMap(self, mjd):
-        numMaps = len(self.cachedMaps)
-        if numMaps == 0:
-            raise RuntimeError("can't make predictions with no clouds posted")
+        """ Predict the cloud map
+        
+        @returns    a CloudMap instance with the predicted cloud cover
+        @param      mjd: the time the prediction is requested for
+        @throws     RuntimeWarning if not enough cloud maps have been posted
+        @throws     ValueError if mjd is before the latest posted cloud map
+        """
 
-        latestMap = self.cachedMaps[-1].cloudMap
-        latestMjd = self.cachedMaps[-1].mjd
+        numMaps = len(self._cachedMaps)
+        if numMaps <= self._NUM_VEL_CALC_FRAMES:
+            raise RuntimeWarning("too few clouds have been posted to predict")
+
+        latestMap = self._cachedMaps[-1].cloudMap
+        latestMjd = self._cachedMaps[-1].mjd
         if mjd <= latestMjd:
             raise ValueError("can't predict the past")
 
         # calculate cloudState for all pairs
-        for i in range(1, numMaps):
-            if self.cachedMaps[i].cloudState is None:
-                map1 = self.cachedMaps[i-1].cloudMap
-                map2 = self.cachedMaps[i].cloudMap
-                deltaT = self.cachedMaps[i].mjd - self.cachedMaps[i-1].mjd
-                self.cachedMaps[i].cloudState = \
-                        self._calculateCloudState(map1, map2, deltaT)
+        for i in range(self._NUM_VEL_CALC_FRAMES, numMaps):
+            if self._cachedMaps[i].cloudState is None:
+                cachedMap1 = self._cachedMaps[i - self._NUM_VEL_CALC_FRAMES]
+                cachedMap2 = self._cachedMaps[i]
+                deltaT = cachedMap2.mjd - cachedMap1.mjd
+                self._cachedMaps[i].cloudState = self._calculateCloudState(
+                        cachedMap1.cloudMap, cachedMap2.cloudMap, deltaT
+                     )
 
-        vys = [cachedMap.cloudState.vel[0] for cachedMap in self.cachedMaps[1:]]
-        vxs = [cachedMap.cloudState.vel[1] for cachedMap in self.cachedMaps[1:]]
-        
-        v = [np.median(vys), np.median(vxs)]
+        vs = [cachedMap.cloudState.vel
+                for cachedMap in self._cachedMaps[self._NUM_VEL_CALC_FRAMES:]]
+        v = np.median(vs, axis=0)
+        print("pred vs:", vs)
+        print("pred median:", v)
+
         predMap = latestMap.transform(CloudState(vel=v), mjd - latestMjd)
         return predMap
 
-    def _calcRmse(self, velocity, map1, map2):
+    def _calcInterpolatedRmse(self, velocity, map1, map2):
+        #print("interpolated:", velocity)
+        (vy1, vx1) = np.floor(velocity).astype(int)
+        (vy2, vx2) = np.ceil(velocity).astype(int)
+
+        directions = [[vy1,vx1],[vy1,vx2],[vy2,vx1],[vy2,vx2]]
+        rmses = [self._calcRmse(direction, map1, map2) for direction in directions]
+        x = y = np.array([0,1])
+        z = np.array(rmses).reshape(2,2)
+        interpolator = RectBivariateSpline(x,y,z,kx=1,ky=1)
+        return interpolator(velocity[0], velocity[1])[0][0]
+
+
+    def _calcRmse(self, direction, map1, map2):
         """ Calculate rmse btwn map1 and map2 when map2 is shifted by velocity
 
         @returns    the root mean squared error
@@ -109,8 +152,8 @@ class CloudServer:
         # Perhaps a better way to do this would be to give scipy.optimize
         # a jacobian function instead of this? Would have to think about it 
         # some more
-        velocity = np.array(velocity) # just in case
-        direction = np.round(velocity).astype(int)
+        #velocity = np.array(velocity) # just in case
+        #direction = np.round(velocity).astype(int)
 
         # check if we've already calculated this rmse:
         map1Hash = map1.hash()
@@ -156,8 +199,8 @@ class CloudServer:
 
         mse = 0
         numPix = 0
-        for y in range(yStart, yEnd, 2):
-            for x in range(xStart, xEnd, 2):
+        for y in range(yStart, yEnd, 4):
+            for x in range(xStart, xEnd, 4):
                 yOff = y - direction[0]
                 xOff = x - direction[1]
                 
@@ -181,6 +224,7 @@ class CloudServer:
         return rmse
 
 class CachedMap:
+    """ Wrapper class for parameters describing the clouds' dynamical state """
     def __init__(self, mjd, cloudMap, cloudState = None):
         self.mjd = mjd
         self.cloudMap = cloudMap
