@@ -15,6 +15,48 @@ from cloudMap import CloudMap
 from astropy.io import fits
 import os
 
+# TODO this should probably be read from the fits files or something
+#xMax = 2897
+#yMax = 1935
+xMax = 2888
+yMax = 1924
+xCent = xMax / 2
+yCent = yMax / 2
+
+# TODO 852 was in the matlab script but using that number made theta
+# leave the allowed [0,pi] range, so I'm using rmax / 2 instead. Is
+# this wrong?
+f = 852 # effective focal length in pixels
+f = np.sqrt(xCent**2 + yCent**2) / 2
+
+# TODO could also read this in from the fits. Also may not be needed
+bias = 2000 # approximately
+
+# x and y are yMax x xMax, where, e.g., x[yindex, xindex]
+# is the x coordinate corresponding to xindex (which is just
+# xindex - xCenter)
+y, x = np.ogrid[-yCent:yCent, -xCent:xCent]
+#x = np.repeat([np.arange(-xCent, xCent)], yMax, axis=0).T
+#y = np.repeat([np.arange(-yCent, yCent)], xMax, axis=0)
+
+# TODO probably don't need cart at all any more? Also where used
+# in hpix2Cartesian
+
+# cart[x,y] are cartesian coordinates in the focal plane
+# cart is yMax x xMax x 2, where cart[yindex,xindex] are
+# the pixel coordinates [y,x] corresponding to array indices
+# (yindex, xindex)
+# cart = np.swapaxes([y,x],0,2)
+
+# (r,phi) are polar coordinates in the focal plane
+r = np.sqrt(y**2 + x**2)
+
+# now calculating phi and theta is straightforward
+phi = np.arctan2(y, x)
+
+# theta is the zenith angle
+theta = 2 * np.arcsin(r / (2 * f))
+
 def fits2Hpix(fits):
     """ Convert a fits image to a healpix map
 
@@ -25,46 +67,6 @@ def fits2Hpix(fits):
     the fits image off at a maximum zenith angle.
     """
 
-    # TODO this should probably be read from the fits files or something
-    #xMax = 2897
-    #yMax = 1935
-    xMax = 2888
-    yMax = 1924
-    xCent = xMax / 2
-    yCent = yMax / 2
-
-    # TODO 852 was in the matlab script but using that number made theta
-    # leave the allowed [0,pi] range, so I'm using rmax / 2 instead. Is
-    # this wrong?
-    f = 852 # effective focal length in pixels
-    f = np.sqrt(xCent**2 + yCent**2) / 2
-
-    # TODO could also read this in from the fits. Also may not be needed
-    bias = 2000 # approximately
-
-    # x and y are yMax x xMax, where, e.g., x[yindex, xindex]
-    # is the x coordinate corresponding to xindex (which is just
-    # xindex - xCenter)
-    x = np.repeat([np.arange(-xCent, xCent)], yMax, axis=0).T
-    y = np.repeat([np.arange(-yCent, yCent)], xMax, axis=0)
-    
-    # TODO probably don't need cart at all any more? Also where used
-    # in hpix2Cartesian
-
-    # cart[x,y] are cartesian coordinates in the focal plane
-    # cart is yMax x xMax x 2, where cart[yindex,xindex] are
-    # the pixel coordinates [y,x] corresponding to array indices
-    # (yindex, xindex)
-    cart = np.swapaxes([y,x],0,2)
-
-    # (r,phi) are polar coordinates in the focal plane
-    r = np.linalg.norm(cart, axis=2)
-
-    # now calculating phi and theta is straightforward
-    phi = np.arctan2(y, x).T
-
-    # theta is the zenith angle
-    theta = 2 * np.arcsin(r / (2 * f))
 
     # TODO are the 3 arrays in the fits file actually (r,g,b)? When I 
     # tried pylab.imshow() on the fits.data, the image looked rather red
