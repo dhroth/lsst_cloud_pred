@@ -117,12 +117,15 @@ class CloudMap:
 
         A pixel is invalid if it's outside of rMax or too close to the sun.
         """
-        if point[0] < 0 or point[1] < 0 or point[0] > xyMax or point[1] > xyMax:
-            raise ValueError("the supplied point:", point, 
-                             "is outside the sky map")
+        # this check approximately doubles the total time of this method
+        # this function is (or was) about 15% of total execution time
+        #if point[0] < 0 or point[1] < 0 or point[0] > xyMax or point[1] > xyMax:
+        #    raise ValueError("the supplied point:", point, 
+        #                     "is outside the sky map")
 
-        point = tuple(point)
-        return self.validMask[point]
+        # doing mask[p[0],p[1]] is about 50% faster than mask[tuple(p)]
+        # this function is (or was) about 15% of total execution time
+        return self.validMask[point[0],point[1]]
 
     def __getitem__(self, args):
         # given a CartesianSky object cart, this method allows other
