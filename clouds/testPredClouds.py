@@ -57,6 +57,10 @@ phi = np.arctan2(y, x)
 # theta is the zenith angle
 theta = 2 * np.arcsin(r / (2 * f))
 
+# this is a list of indices in the order that pixels appear
+# in b
+orderedIndices = hp.ang2pix(cloudMap.nside, theta, phi)
+
 def fits2Hpix(fits):
     """ Convert a fits image to a healpix map
 
@@ -82,7 +86,7 @@ def fits2Hpix(fits):
 
     # the blue probably has the most information, so ignore r and g
     hpix = np.zeros(cloudMap.npix)
-    hpix[hp.ang2pix(cloudMap.nside, theta, phi)] = b
+    hpix[orderedIndices] = b
     
     return hpix
 
