@@ -34,6 +34,13 @@ z = 40
 # minimum distance from the sun in pixels 
 sunAvoidRadius = 30
 
+# y and x are useful for making masks
+y, x = np.ogrid[0:xyMax,0:xyMax]
+
+# maintain a mask of pixels within rMax
+insideRMaxMask = (y - xyCent)**2 + (x - xyCent)**2 <= rMax**2
+
+
 class CloudMap:
     """ Cartesian representation of the cloud cover
 
@@ -86,11 +93,13 @@ class CloudMap:
             self.sunPos = self.getSunPos()
         else:
             self.sunPos = sunPos
+
         # keep track of which pixels are valid
-        self.validMask = np.array([[self.isPixelValid([y,x]) 
-                                   for x in range(xyMax)] 
-                                   for y in range(xyMax)])
-        # mark invalid pixels as -1
+        sunY, sunX = self.sunPos
+        outsideSunMask = (y - sunY)**2 + (x - sunX)**2 >= sunAvoidRadius**2
+
+        self.validMask = insideRMaxMask & outsideSunMask
+
         self.cloudData[np.logical_not(self.validMask)] = -1
 
     def isPixelValid(self, point):
@@ -106,17 +115,8 @@ class CloudMap:
             raise ValueError("the supplied point:", point, 
                              "is outside the sky map")
 
-        point = np.array(point)
-        center = np.array([xyCent,xyCent])
-
-        # return False if the pixel is farther than rMax from the center
-        # or if it is closer than sunAvoidRadius from the sun
-        if np.linalg.norm(point - center) > rMax:
-            return False
-        if np.linalg.norm(point - self.sunPos) < sunAvoidRadius:
-            return False
-
-        return True
+        point = tuple(point)
+        return self.validMask[point]
 
     def __getitem__(self, args):
         # given a CartesianSky object cart, this method allows other
