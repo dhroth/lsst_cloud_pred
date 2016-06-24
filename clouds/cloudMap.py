@@ -45,6 +45,7 @@ class CloudMap:
     """ Cartesian representation of the cloud cover
 
     Instance variables:
+    mapId:      a unique identifier for the map
     cloudData:  a numpy array of shape (xyMax, xyMax) mapping the cloud cover
     sunPos:     the position [y,x] of the sun in this image
     validMask:  a binary mask indicating which pixels in the image are valid
@@ -64,10 +65,14 @@ class CloudMap:
     mean():                 calculate the mean of the valid pixels
     """
 
-    def __init__(self, cloudData, sunPos = None):
+    def __init__(self, mapId, cloudData, sunPos = None):
         """ Initialize the CartesianSky
 
         @returns    void
+        @param      mapId: a unique identifier for the map (this is used
+                    to avoid hashing the entire np.array upon a call to
+                    hash(). If the map doesn't need to be hashable then
+                    mapId can go away
         @param      cloudData: a np.array with the cloud cover pixel values
         @param      sunPos (optional): the position of the sun in the image
                     If not passed in, it will be calculated
@@ -78,6 +83,7 @@ class CloudMap:
         the valid mask for the sky map.
 
         """
+        self.mapId = mapId
         if cloudData.shape != (xyMax, xyMax):
             raise ValueError("the passed in cloud data has the wrong shape")
         if sunPos is not None and (sunPos[0] < 0 or sunPos[0] > xyMax or
@@ -126,8 +132,7 @@ class CloudMap:
         return self.cloudData[y,x]
     
     def hash(self):
-        self.cloudData.flags.writeable = False
-        return hash(self.cloudData.data)
+        return hash(self.mapId)
 
     # Comparison methods, allowing for syntax like map1 > map2
     # and map3 <= 100
@@ -236,7 +241,8 @@ class CloudMap:
         #translatedCart = np.roll(cart, direction[0], axis=0)
         #translatedCart = np.roll(translatedCart, direction[1], axis=1)
 
-        return CloudMap(transformedData, sunPos = self.sunPos + direction)
+        mId = self.mapId + str(np.random.random())
+        return CloudMap(mId, transformedData, sunPos = self.sunPos + direction)
 
     def plot(self, maxPixel, title=""):
         plt.figure(title)
@@ -255,10 +261,11 @@ class CloudMap:
         return np.mean(self.cloudData[self.validMask])
 
 
-def fromHpix(hpix):
+def fromHpix(mapId, hpix):
     """ Convert a healpix image to a cartesian cloud map
 
     @returns    a CloudMap object with the data from the hpix
+    @param      mapId: a unique identifier for the map
     @param      hpix: the healpix to be converted
 
     The top plane in the crude picture below is the cartesian plane
@@ -298,7 +305,7 @@ def fromHpix(hpix):
     cloudData = np.zeros((xyMax, xyMax))
     cloudData[y.flatten(),x.flatten()] = hpix[ipixes.flatten()]
 
-    return CloudMap(cloudData)
+    return CloudMap(mapId, cloudData)
 
 def toHpix(cloudMap):
     """ Convert a CloudMap to a healpix image

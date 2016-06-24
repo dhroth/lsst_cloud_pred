@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
         # convert to a CloudMap
         hpix = fits2Hpix(fitsFile.data)
-        cMap = cloudMap.fromHpix(hpix)
+        cMap = cloudMap.fromHpix(str(i), hpix)
 
         # and post to the CloudServer
         cloudServer.postCloudMap(mjds[i - numStart], cMap)
