@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 
 from rmseEstimator import RmseEstimator
-#from fftEstimator import FftEstimator
+from fftEstimator import FftEstimator
 
 import time
 
@@ -26,7 +26,8 @@ class CloudServer:
         self._cachedRmses = {}
 
         # use this estimator for estimating cloud states
-        self.estimator = RmseEstimator
+        self.estimator = FftEstimator
+        #self.estimator = RmseEstimator
 
     def postCloudMap(self, mjd, cloudMap):
         """ Notify CloudServer that a new cloud map is available
