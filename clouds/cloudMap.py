@@ -244,6 +244,7 @@ class CloudMap:
         #translatedCart = np.roll(cart, direction[0], axis=0)
         #translatedCart = np.roll(translatedCart, direction[1], axis=1)
 
+        #TODO need to deal with mapId better
         mId = self.mapId + str(np.random.random())
         return CloudMap(mId, transformedData, sunPos = self.sunPos + direction)
 

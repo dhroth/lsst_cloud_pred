@@ -18,9 +18,9 @@ class CloudServer:
 
     def __init__(self):
         # throw out stale cloud maps once we reach more than this many
-        self._MAX_CACHED_MAPS = 20
+        self._MAX_CACHED_MAPS = 40
         # calculate velocity vectors between frames this far apart
-        self._NUM_VEL_CALC_FRAMES = 10
+        self._NUM_VEL_CALC_FRAMES = 20
 
         self._cachedMaps = []
         self._cachedRmses = {}
