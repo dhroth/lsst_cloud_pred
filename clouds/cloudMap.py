@@ -188,7 +188,7 @@ class CloudMap:
         the first such pixel.
         """
         # average the image to find the sun
-        n = 5
+        n = 10
         k = np.ones((n,n)) / n**2
         avg = convolve2d(self.cloudData, k, mode="same")
 
