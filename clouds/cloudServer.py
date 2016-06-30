@@ -26,8 +26,11 @@ class CloudServer:
         self._cachedRmses = {}
 
         # use this estimator for estimating cloud states
-        self.estimator = FftEstimator
-        #self.estimator = RmseEstimator
+        #self.estimator = FftEstimator
+        self.estimator = RmseEstimator
+
+    def isReadyForPrediction(self):
+        return len(self._cachedMaps) > self._NUM_VEL_CALC_FRAMES
 
     def postCloudMap(self, mjd, cloudMap):
         """ Notify CloudServer that a new cloud map is available
@@ -78,8 +81,8 @@ class CloudServer:
         vs = [cachedMap.cloudState.vel
                 for cachedMap in self._cachedMaps[self._NUM_VEL_CALC_FRAMES:]]
         v = np.median(vs, axis=0)
-        print("pred vs:", vs)
-        print("pred median:", v)
+        #print("pred vs:", vs)
+        #print("pred median:", v)
 
         predMap = latestMap.transform(CloudState(vel=v), mjd - latestMjd)
         return predMap

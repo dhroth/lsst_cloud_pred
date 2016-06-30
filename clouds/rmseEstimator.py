@@ -32,7 +32,7 @@ class RmseEstimator(CloudStateEstimator):
         # to move map2 down to make it look like map1, then the clouds moved up
         # between map1 and map2. Therefore we need the minus sign here
         cloudVelocity = -1 * result.x / deltaT
-        print("result of minimize:", cloudVelocity)
+        #print("result of minimize:", cloudVelocity)
         return CloudState(vel=cloudVelocity)
 
     @staticmethod

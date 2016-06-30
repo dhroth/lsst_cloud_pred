@@ -4,9 +4,12 @@ from __future__ import print_function
 import numpy as np
 import healpy as hp
 import matplotlib
-matplotlib.use("Agg")
+#matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
+from astropy.time import Time
+
+from datetime import date
 
 from cloudServer import CloudServer
 import cloudMap
@@ -16,10 +19,12 @@ from astropy.io import fits
 import os
 
 # TODO this should probably be read from the fits files or something
-#xMax = 2897
-#yMax = 1935
+# this is the ut111515 shape
 xMax = 2888
 yMax = 1924
+# this is the shape of all the other data
+xMax = 2897
+yMax = 1935
 xCent = xMax / 2
 yCent = yMax / 2
 
@@ -78,6 +83,8 @@ def fits2Hpix(fits):
     # the fits files that I got from Chris in the ut111515 directory only
     # have one subarray it seems so I'll just pretend it's blue for now
     #(r,g,b) = fits
+
+    # TODO make this faster: cut off zenith angle in orderedIndices
     b = fits
 
     b -= bias
@@ -90,32 +97,64 @@ def fits2Hpix(fits):
     
     return hpix
 
+def calcAccuracy(predMap, trueMap): 
+    # calculate various forms of accuracy
+
+    # cloudyThreshold would presumably be determined by the tolerance
+    # LSST has for looking through clouds
+    cloudyThreshold = 1000 
+    numTrueCloudy = np.size(np.where(trueMap > cloudyThreshold)[0])
+    numTrueClear  = np.size(np.where(trueMap < cloudyThreshold)[0])
+
+    fracCloudyandCloudy = np.size(
+        np.where((predMap > cloudyThreshold) & (trueMap > cloudyThreshold))[0]
+    ) / numTrueCloudy
+
+    #print("Of the pixels which turned out to be cloudy, ",
+    #      fracCloudyandCloudy * 100,
+    #      "percent of them were predicted to be cloudy.")
+
+    fracPredClearAndTrueCloudy = np.size(
+        np.where((predMap < cloudyThreshold) & (trueMap > cloudyThreshold))[0]
+    ) / numTrueCloudy
+
+    #print("Of the pixels which turned out to be cloudy,",
+    #      fracPredClearAndTrueCloudy * 100,
+    #      "percent of them were predicted to be clear.")
+
+    fracPredCloudyAndTrueClear = np.size(
+        np.where((predMap > cloudyThreshold) & (trueMap < cloudyThreshold))[0]
+    ) / numTrueClear
+
+    #print("Of the pixels which turned out to be clear,",
+    #      fracPredCloudyAndTrueClear * 100,
+    #      "percent of them were predicted to be cloudy.")
+    
+    return (fracCloudyandCloudy, 
+            fracPredClearAndTrueCloudy, 
+            fracPredCloudyAndTrueClear)
+
 if __name__ == "__main__":
-    dataDir = "/data/allsky/ut111515/"
-    filePrefix = "ut111515.daycal."
+    dataDir = "/data/allsky/ut041616/fits/"
+    filePrefix = "ut041616.daycal."
     filePostfix = ".fits"
     def getFilename(filenum):
         return dataDir + filePrefix + str(filenum).zfill(4) + filePostfix
 
-    # this is all of them
-    nums = range(1,599)
-    # this is the first ~1 hr chunk
-    nums = range(0, 199)
-    # this is the second ~1 hr chunk
-    numStart = 201
-    numEnd = 399
-    numEnd = 240
-    nums = range(numStart, numEnd)
+    # inclusive start/end
+    fileNumStart = 2
+    fileNumEnd = 1701
+    fileNums = range(fileNumStart, fileNumEnd + 1)
 
     # first get mjds for each fits file
-    mjds = np.zeros(len(nums)).astype(float)
-    for i in nums:
-        fileName = getFilename(i)
+    mjds = np.zeros(len(fileNums)).astype(float)
+    for i in range(len(fileNums)):
+        fileName = getFilename(fileNums[i])
         if os.path.exists(fileName):
             mjd = fits.open(fileName)[0].header["mjd-obs"]
         else:
             mjd = -1
-        mjds[i - numStart] = mjd
+        mjds[i] = mjd
 
     # start up the cloud server
     cloudServer = CloudServer()
@@ -129,17 +168,26 @@ if __name__ == "__main__":
     plt.figsize=(10,10)
 
     # create a 3x3 grid of subplots
-    fig, axarr = pylab.subplots(3,3)
+    fig, axarr = pylab.subplots(4,3)
     imgs = np.array([[None for x in range(3)] for y in range(4)])
 
-    # and put the placeholder image in all of them
+    # and put the placeholder image where images will later be placed
     for y in range(3):
         for x in range(3):
             axarr[y,x].axis("off")
+            if y == 0 and x != 1:
+                # top left and right corners don't get images
+                continue
             imgs[y,x] = axarr[y,x].imshow(placeholder, vmax=3000, cmap=plt.cm.jet)
 
     # put titles on each subplot
     axarr[0,1].set_title("True Clouds")
+
+    # put stats legend in upper left
+    axarr[0,0].axis("off")
+    axarr[0,0].text(0, 0.2, "% cloudy pred as cloudy", color="blue")
+    axarr[0,0].text(0, 0.5, "% cloudy pred as clear", color="green")
+    axarr[0,0].text(0, 0.8, "% clear pred as cloudy", color="red")
 
     axarr[1,0].set_title("~5 Min Prediction")
     axarr[1,1].set_title("~10 Min Prediction")
@@ -149,119 +197,84 @@ if __name__ == "__main__":
     axarr[2,1].set_title("Diff from True")
     axarr[2,2].set_title("Diff from True")
 
-    """
-    axarr[3,0].set_title("Accuracy")
-    axarr[3,1].set_title("Accuracy")
-    axarr[3,2].set_title("Accuracy")
-    """
+    statColors = ["red", "green", "blue"]
+    
+    for i in range(3):
+        axarr[3,i].set_title("Accuracy")
+        axarr[3,i].set_ylim([0,100])
+        axarr[3,i].set_xticklabels([])
 
-    # get the first array index whose mjd is greater than the argument 
-    def getClosestNum(mjd):
-        for i in nums:
-            if mjd > mjds[i - numStart] or mjds[i - numStart] == -1:
-                continue
-            return i
-        return -1
-
-    # keep track of all the predictions
-    fiveMinPreds = [None] * len(nums)
-    tenMinPreds = [None] * len(nums)
-    twentyMinPreds = [None] * len(nums)
+    # keep track of all the predictions in predMaps
+    predTimes = [m / 60 / 24 for m in [5, 10, 20]]
+    predMaps = [[None for i in range(len(predTimes))] 
+                for j in range(len(fileNums))]
+    # we keep track of three measures of accuracy for three prediction times
+    accuracies = np.zeros((len(fileNums), 3, 3))
 
     # loop through ever image, predicting 5, 10, and 20 minutes ahead
     # at each step and storing the results in the arrays above
-    for i in nums:
-        fileName = getFilename(i)
+    for i in range(len(fileNums)):
+        curFileNum = fileNums[i]
+        curMjd = mjds[i]
+
+        fileName = getFilename(curFileNum)
         if not os.path.exists(fileName):
-            # there are a couple missing files. Too bad
+            # there are some missing files. Too bad
             continue
 
         fitsFile = fits.open(fileName)[0]
 
         # convert to a CloudMap
         hpix = fits2Hpix(fitsFile.data)
-        cMap = cloudMap.fromHpix(str(i), hpix)
+        curMap = cloudMap.fromHpix(str(curFileNum), hpix)
 
         # and post to the CloudServer
-        cloudServer.postCloudMap(mjds[i - numStart], cMap)
+        cloudServer.postCloudMap(curMjd, curMap)
 
-        # TODO shouldn't expose this
-        if i <= numStart + cloudServer._NUM_VEL_CALC_FRAMES:
+        if not cloudServer.isReadyForPrediction():
             # can't pred before we have enough posted data
             continue
 
-        # TODO clean up this i - numStart business. Also the duplicate code
-        fiveMinNum = getClosestNum(mjds[i - numStart] + (5 * 60) / 24 / 3600)
-        if fiveMinNum != -1:
-            fiveMinPred = cloudServer.predCloudMap(mjds[fiveMinNum - numStart])
-            fiveMinPreds[fiveMinNum - numStart] = fiveMinPred
+        # make a prediction for each predTime in predTimes
+        for predTimeId in range(len(predTimes)):
+            predTime = predTimes[predTimeId]
+            # figure out which fileNum we're trying to predict
+            # this will be the fileNum approximately predTime days after
+            # the ith fileNum
+            predFileNumId = -1
+            for j in range(i, len(fileNums)):
+                if mjds[j] > curMjd + predTime:
+                    predFileNumId = j
+                    break
+            if predFileNumId != -1:
+                predMap = cloudServer.predCloudMap(mjds[predFileNumId])
+                predMaps[predFileNumId][predTimeId] = predMap
 
-        tenMinNum = getClosestNum(mjds[i - numStart] + (10 * 60) / 24 / 3600)
-        if tenMinNum != -1:
-            tenMinPred = cloudServer.predCloudMap(mjds[tenMinNum - numStart])
-            tenMinPreds[tenMinNum - numStart] = tenMinPred
-
-        twentyMinNum = getClosestNum(mjds[i - numStart] + (20 * 60) / 24 / 3600)
-        if twentyMinNum != -1:
-            twentyMinPred = cloudServer.predCloudMap(mjds[twentyMinNum - numStart])
-            twentyMinPreds[twentyMinNum - numStart] = twentyMinPred
 
         # now plot all the images for number i
         # TODO should keep this all private--can probably override subtraction
-        imgs[0,1].set_data(cMap.cloudData)
-        if fiveMinPreds[i - numStart] is not None:
-            imgs[1,0].set_data(fiveMinPreds[i - numStart].cloudData)
-            diff = np.abs(fiveMinPreds[i - numStart].cloudData - cMap.cloudData)
-            diff[np.logical_not(fiveMinPreds[i - numStart].validMask)] = 0
-            diff[np.logical_not(cMap.validMask)] = 0
-            imgs[2,0].set_data(diff)
-        if tenMinPreds[i - numStart] is not None:
-            imgs[1,1].set_data(tenMinPreds[i - numStart].cloudData)
-            diff = np.abs(tenMinPreds[i - numStart].cloudData - cMap.cloudData)
-            diff[np.logical_not(tenMinPreds[i - numStart].validMask)] = 0
-            diff[np.logical_not(cMap.validMask)] = 0
-            imgs[2,1].set_data(diff)
-        if twentyMinPreds[i - numStart] is not None:
-            imgs[1,2].set_data(twentyMinPreds[i - numStart].cloudData)
-            diff = np.abs(twentyMinPreds[i - numStart].cloudData - cMap.cloudData)
-            diff[np.logical_not(twentyMinPreds[i - numStart].validMask)] = 0
-            diff[np.logical_not(cMap.validMask)] = 0
-            imgs[2,2].set_data(diff)
+        imgs[0,1].set_data(curMap.cloudData)
+        t = Time(curMjd, format="mjd").datetime
+        axarr[0,2].cla()
+        axarr[0,2].axis("off")
+        axarr[0,2].text(0.2, 0.5, date.strftime(t, "%H:%M:%S"))
+        for predTimeId in range(len(predTimes)):
+            predMap = predMaps[i][predTimeId]
+            if predMap is not None:
+                imgs[1,predTimeId].set_data(predMap.cloudData)
+                diff = np.abs(predMap.cloudData - curMap.cloudData)
+                diff[np.where(~predMap.validMask | ~curMap.validMask)] = 0
+                imgs[2,predTimeId].set_data(diff)
+                #(fracCloudyandCloudy, 
+                # fracPreddClearAndTrueCloudy, 
+                # fracPredCloudyAndTrueClear) = calcAccuracy(predMap, curMap)
+                accuracies[i][predTimeId] = list(calcAccuracy(predMap, curMap))
+                axarr[3,predTimeId].cla()
+                axarr[3,predTimeId].set_title("Accuracy")
+                axarr[3,predTimeId].set_ylim([0,100])
+                axarr[3,predTimeId].set_xticklabels([])
+                axarr[3,predTimeId].plot(accuracies[i-10:i,predTimeId,:] * 100)
 
-        print("saving number", i)
-        pylab.savefig("fullpngs/" + str(i) + ".png", dpi=200)
+        print("saving number", curFileNum)
+        pylab.savefig("fullpngs/" + str(curFileNum) + ".png", dpi=200)
 
-
-    """
-    # calculate various forms of accuracy
-
-    # cloudyThreshold would presumably be determined by the tolerance
-    # LSST has for looking through clouds
-    cloudyThreshold = 1000 
-    numFutureCloudy = np.size(np.where(futureMap > cloudyThreshold)[0])
-    numFutureClear  = np.size(np.where(futureMap < cloudyThreshold)[0])
-
-    fracCloudyandCloudy = np.size(
-        np.where((predMap > cloudyThreshold) & (futureMap > cloudyThreshold))[0]
-    ) / numFutureCloudy
-
-    print("Of the pixels which turned out to be cloudy, ",
-          fracCloudyandCloudy * 100,
-          "percent of them were predicted to be cloudy.")
-
-    fracPredClearAndFutureCloudy = np.size(
-        np.where((predMap < cloudyThreshold) & (futureMap > cloudyThreshold))[0]
-    ) / numFutureCloudy
-
-    print("Of the pixels which turned out to be cloudy,",
-          fracPredClearAndFutureCloudy * 100,
-          "percent of them were predicted to be clear.")
-
-    fracPredCloudyAndFutureClear = np.size(
-        np.where((predMap > cloudyThreshold) & (futureMap < cloudyThreshold))[0]
-    ) / numFutureClear
-
-    print("Of the pixels which turned out to be clear,",
-          fracPredCloudyAndFutureClear * 100,
-          "percent of them were predicted to be cloudy.")
-    """
