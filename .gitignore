@@ -1,0 +1,11 @@
+*.pyc
+design/*
+fisheye/*
+sched/*
+clouds/pngs/*
+clouds/fullpngs/*
+*.npy
+ian_*
+clouds/fits/*
+profile.*
+*.m
