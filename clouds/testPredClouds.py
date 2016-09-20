@@ -4,11 +4,12 @@ from __future__ import print_function
 import numpy as np
 import healpy as hp
 import matplotlib
-#matplotlib.use("Agg")
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from astropy.time import Time
 
+import sys
 from datetime import date
 
 from cloudServer import CloudServer
@@ -23,8 +24,8 @@ import os
 xMax = 2888
 yMax = 1924
 # this is the shape of all the other data
-xMax = 2897
-yMax = 1935
+#xMax = 2897
+#yMax = 1935
 xCent = xMax / 2
 yCent = yMax / 2
 
@@ -135,15 +136,18 @@ def calcAccuracy(predMap, trueMap):
             fracPredCloudyAndTrueClear)
 
 if __name__ == "__main__":
-    dataDir = "/data/allsky/ut041616/fits/"
-    filePrefix = "ut041616.daycal."
+    if len(sys.argv) != 2:
+        exit("usage is testPredClouds.py date")
+    predDate = sys.argv[1]
+    dataDir = "/data/allsky/ut" + predDate + "/fits/"
+    filePrefix = "ut" + predDate + ".daycal."
     filePostfix = ".fits"
     def getFilename(filenum):
         return dataDir + filePrefix + str(filenum).zfill(4) + filePostfix
 
     # inclusive start/end
-    fileNumStart = 2
-    fileNumEnd = 1701
+    fileNumStart = 201
+    fileNumEnd = 599
     fileNums = range(fileNumStart, fileNumEnd + 1)
 
     # first get mjds for each fits file
@@ -276,5 +280,8 @@ if __name__ == "__main__":
                 axarr[3,predTimeId].plot(accuracies[i-10:i,predTimeId,:] * 100)
 
         print("saving number", curFileNum)
-        pylab.savefig("fullpngs/" + str(curFileNum) + ".png", dpi=200)
+        path = "fullpngs/ut" + predDate
+        if not os.path.isdir(path):
+            os.mkdir(path)
+        pylab.savefig(path + "/" + str(curFileNum) + ".png", dpi=200)
 
