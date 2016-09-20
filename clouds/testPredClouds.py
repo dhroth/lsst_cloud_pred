@@ -107,30 +107,37 @@ def calcAccuracy(predMap, trueMap):
     numTrueCloudy = np.size(np.where(trueMap > cloudyThreshold)[0])
     numTrueClear  = np.size(np.where(trueMap < cloudyThreshold)[0])
 
-    fracCloudyandCloudy = np.size(
-        np.where((predMap > cloudyThreshold) & (trueMap > cloudyThreshold))[0]
-    ) / numTrueCloudy
+    if numTrueCloudy == 0:
+        fracCloudyandCloudy = 0
+        fracPredClearAndTrueCloudy = 0
+    else:
+        fracCloudyandCloudy = np.size(
+            np.where((predMap>cloudyThreshold) & (trueMap>cloudyThreshold))[0]
+        ) / numTrueCloudy
 
-    #print("Of the pixels which turned out to be cloudy, ",
-    #      fracCloudyandCloudy * 100,
-    #      "percent of them were predicted to be cloudy.")
+        #print("Of the pixels which turned out to be cloudy, ",
+        #      fracCloudyandCloudy * 100,
+        #      "percent of them were predicted to be cloudy.")
 
-    fracPredClearAndTrueCloudy = np.size(
-        np.where((predMap < cloudyThreshold) & (trueMap > cloudyThreshold))[0]
-    ) / numTrueCloudy
+        fracPredClearAndTrueCloudy = np.size(
+            np.where((predMap<cloudyThreshold) & (trueMap>cloudyThreshold))[0]
+        ) / numTrueCloudy
 
-    #print("Of the pixels which turned out to be cloudy,",
-    #      fracPredClearAndTrueCloudy * 100,
-    #      "percent of them were predicted to be clear.")
+        #print("Of the pixels which turned out to be cloudy,",
+        #      fracPredClearAndTrueCloudy * 100,
+        #      "percent of them were predicted to be clear.")
 
-    fracPredCloudyAndTrueClear = np.size(
-        np.where((predMap > cloudyThreshold) & (trueMap < cloudyThreshold))[0]
-    ) / numTrueClear
+    if numTrueClear == 0:
+        fracPredCloudyAndTrueClear = 0
+    else:
+        fracPredCloudyAndTrueClear = np.size(
+            np.where((predMap>cloudyThreshold) & (trueMap<cloudyThreshold))[0]
+        ) / numTrueClear
 
-    #print("Of the pixels which turned out to be clear,",
-    #      fracPredCloudyAndTrueClear * 100,
-    #      "percent of them were predicted to be cloudy.")
-    
+        #print("Of the pixels which turned out to be clear,",
+        #      fracPredCloudyAndTrueClear * 100,
+        #      "percent of them were predicted to be cloudy.")
+        
     return (fracCloudyandCloudy, 
             fracPredClearAndTrueCloudy, 
             fracPredCloudyAndTrueClear)
