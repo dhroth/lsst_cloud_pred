@@ -11,33 +11,46 @@ import numpy as np
 
 
 class RmseEstimator(CloudStateEstimator):
+    """ Estimate cloud velocity by minimizing rmse
+    
+    Shift one map around until it looks maximally like the other map.
+    The shift that makes this happen is the velocity vector.
+    
+    Right now I'm using scipy.optimize, which optimizes over the 
+    reals, not the integers (makes sense since optimization over
+    integers is much harder). To compensate, when scipy asks
+    for the loss function at some non-integer pixel offset, I
+    interpolate over nearby integer pixel offsets (_calcInterpolatedRmse)
+    
+    Overall, this method is slow, cumbersome, and inelegant. Unfortunately,
+    it works pretty well, and I haven't gotten the FFTEstimator to
+    work nearly as well. Alas...
+    """
 
     # TODO this cache never gets cleared, which is a wide-open memory leak
     # this needs to be fixed if RmseEstimator is actually going to be used
+    # hopefully FFTEstimator can get figured out before production though
     _cachedRmses = {}
 
     @staticmethod
     def _doEstimateCloudState(map1, map2, deltaT):
-        # TODO
-        # the parameters are vy and vx
         initialGuess = np.array([5,5])
         result = minimize(RmseEstimator._calcInterpolatedRmse, 
                           initialGuess, 
                           method="CG",
                           options={"eps":1},
                           args=(map1, map2))
-        # TODO check result.success
+        # TODO I should probably check result.success, but I'm not sure what
+        # I would do if it failed, and it seems to always succeed anyway
         # calcRmse moves map2 around to make it look like map1. Since map2 is
         # from a time later than map1, that means that if, for example, you have
         # to move map2 down to make it look like map1, then the clouds moved up
         # between map1 and map2. Therefore we need the minus sign here
         cloudVelocity = -1 * result.x / deltaT
-        #print("result of minimize:", cloudVelocity)
         return CloudState(vel=cloudVelocity)
 
     @staticmethod
     def _calcInterpolatedRmse(velocity, map1, map2):
-        #print("interpolated:", velocity)
         (vy1, vx1) = np.floor(velocity).astype(int)
         (vy2, vx2) = np.ceil(velocity).astype(int)
 
@@ -55,7 +68,6 @@ class RmseEstimator(CloudStateEstimator):
         """ Calculate rmse btwn map1 and map2 when map2 is shifted by velocity
 
         @returns    the root mean squared error
-        TODO change once spread is added
         @param      velocity: the amount to shift map2 by
         @param      map1: the stationary map
         @param      map2: the map which is shifted
@@ -66,14 +78,6 @@ class RmseEstimator(CloudStateEstimator):
             raise TypeError("map1 must be a CloudMap object")
         if not isinstance(map2, CloudMap):
             raise TypeError("map2 must be a CloudMap object")
-
-        # TODO the velocities passed in by scipy.optimize.minimize are floats
-        # and I don't think one can easily change it to search over the integers
-        # Perhaps a better way to do this would be to give scipy.optimize
-        # a jacobian function instead of this? Would have to think about it 
-        # some more
-        #velocity = np.array(velocity) # just in case
-        #direction = np.round(velocity).astype(int)
 
         # check if we've already calculated this rmse:
         calculationHash = (hash(tuple(direction)), map1.hash(), map2.hash())
@@ -127,10 +131,6 @@ class RmseEstimator(CloudStateEstimator):
 
                 if not map2.isPixelValid([yOff,xOff]):
                     continue
-
-                # TODO does this belong here?
-                #if map1[y,x] == -1 or map2[yOff,xOff] == -1:
-                #    raise ValueError("there must be no unseen valid pixels")
 
                 mse += (map1[y,x] - map2[yOff,xOff])**2
                 numPix += 1

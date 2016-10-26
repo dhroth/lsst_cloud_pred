@@ -24,7 +24,6 @@ class CloudStateEstimator(object):
     def estimateCloudState(cls, map1, map2, deltaT):
         """ Find the cloud state using two closely-spaced CloudMap objects
 
-        TODO update if/once spread is added
         Use scipy.optimize.minimize to find the velocity vector which minimizes
         the rmse between map1 and map2 when translated by the velocity.
 

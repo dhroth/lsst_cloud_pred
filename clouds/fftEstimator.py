@@ -1,7 +1,8 @@
 from __future__ import division
 from __future__ import print_function
 
-""" The code in this file was adapted from code written by Ian Sullivan """
+""" The code in this file was adapted from code written by Ian Sullivan 
+    (thanks Ian!) """
 
 import copy
 import numpy as np

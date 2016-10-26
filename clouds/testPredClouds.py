@@ -19,91 +19,95 @@ from cloudMap import CloudMap
 from astropy.io import fits
 import os
 
-# TODO this should probably be read from the fits files or something
-# this is the ut111515 shape
-xMax = 2888
-yMax = 1924
-# this is the shape of all the other data
-#xMax = 2897
-#yMax = 1935
-xCent = xMax / 2
-yCent = yMax / 2
+# This annoying "registering dimensions" is necessary because I haven't
+# split FITS management into a different class. Given that the final
+# system will be dealing with live camera data probably in the form of
+# healpix maps, I haven't bothered to make a FitsManagement class.
+# (I wouldn't have to do this if I just recalculated orderedIndices
+# each time through fits2Hpix, but that would be very expensive)
+areDimensionsRegistered = False
+fitsWidth = 0
+fitsHeight = 0
+x = y = f = r = phi = theta = orderedIndices = None
 
-# TODO 852 was in the matlab script but using that number made theta
-# leave the allowed [0,pi] range, so I'm using rmax / 2 instead. Is
-# this wrong?
-f = 852 # effective focal length in pixels
-f = np.sqrt(xCent**2 + yCent**2) / 2
+def registerFitsDimensions(width, height):
+    # this method has two purposes: ensure that all fits files being considered
+    # have the same dimensions, and precalculate theta and orderedIndices for
+    # use in fits2Hpix so we don't have to recalculate them each time
+    # Sorry this is kind of ugly with globals and such -- see comment above
+    global areDimensionsRegistered, fitsWidth, fitsHeight
+    if areDimensionsRegistered:
+        if width != fitsWidth or height != fitsHeight:
+            raise ValueError("New fits width/height don't match existing")
+        else:
+            return
 
-# TODO could also read this in from the fits. Also may not be needed
-bias = 2000 # approximately
+    # if we get here, this is the first time registering fits dimensions
+    fitsWidth = width
+    fitsHeight = height
+    areDimensionsRegistered = True
 
-# x and y are yMax x xMax, where, e.g., x[yindex, xindex]
-# is the x coordinate corresponding to xindex (which is just
-# xindex - xCenter)
-y, x = np.ogrid[-yCent:yCent, -xCent:xCent]
-#x = np.repeat([np.arange(-xCent, xCent)], yMax, axis=0).T
-#y = np.repeat([np.arange(-yCent, yCent)], xMax, axis=0)
+    xCent = fitsWidth / 2
+    yCent = fitsHeight / 2
 
-# TODO probably don't need cart at all any more? Also where used
-# in hpix2Cartesian
+    global f, x, y, r, phi, theta, orderedIndices
+    # TODO I'm not totally sure if this is the correct way to calculate
+    # the effective focal length. For ut111515, the value I got from
+    # Chris Stubbs was 852
+    f = np.sqrt(xCent**2 + yCent**2) / 2 # effective focal length in pixels
 
-# cart[x,y] are cartesian coordinates in the focal plane
-# cart is yMax x xMax x 2, where cart[yindex,xindex] are
-# the pixel coordinates [y,x] corresponding to array indices
-# (yindex, xindex)
-# cart = np.swapaxes([y,x],0,2)
+    # cartesian coordinates in the focal plane
+    y, x = np.ogrid[-yCent:yCent, -xCent:xCent]
 
-# (r,phi) are polar coordinates in the focal plane
-r = np.sqrt(y**2 + x**2)
+    # (r,phi) are polar coordinates in the focal plane
+    r = np.sqrt(y**2 + x**2)
+    phi = np.arctan2(y, x)
 
-# now calculating phi and theta is straightforward
-phi = np.arctan2(y, x)
+    # theta is the zenith angle
+    theta = 2 * np.arcsin(r / (2 * f))
 
-# theta is the zenith angle
-theta = 2 * np.arcsin(r / (2 * f))
+    # this is a list of indices in the order that pixels appear
+    # in the fits files
+    orderedIndices = hp.ang2pix(cloudMap.nside, theta, phi)
 
-# this is a list of indices in the order that pixels appear
-# in b
-orderedIndices = hp.ang2pix(cloudMap.nside, theta, phi)
-
-def fits2Hpix(fits):
+def fits2Hpix(fitsData, bias):
     """ Convert a fits image to a healpix map
 
     @returns    a healpix map with the fits data in it
-    @param      a fits image array
+    @param      fitsData: a fits image array
+    @param      bias: bias from the fits header
 
     This function maps a fits allsky image into a healpix map, cutting
     the fits image off at a maximum zenith angle.
     """
 
-
-    # TODO are the 3 arrays in the fits file actually (r,g,b)? When I 
-    # tried pylab.imshow() on the fits.data, the image looked rather red
-    # I generated the fits files using the raw2fits script
-    # the fits files that I got from Chris in the ut111515 directory only
-    # have one subarray it seems so I'll just pretend it's blue for now
-    #(r,g,b) = fits
+    fitsData -= bias
 
     # TODO make this faster: cut off zenith angle in orderedIndices
-    b = fits
+    # instead of here
+    fitsData[np.where(theta > cloudMap.thetaMax)] = -1
 
-    b -= bias
-
-    b[theta > cloudMap.thetaMax] = -1
-
-    # the blue probably has the most information, so ignore r and g
     hpix = np.zeros(cloudMap.npix)
-    hpix[orderedIndices] = b
+    hpix[orderedIndices] = fitsData
     
     return hpix
 
 def calcAccuracy(predMap, trueMap): 
-    # calculate various forms of accuracy
+    """ Calculate various forms of accuracy
 
-    # cloudyThreshold would presumably be determined by the tolerance
-    # LSST has for looking through clouds
-    cloudyThreshold = 1000 
+    @returns    a 3-tuple containing the fraction of pixels:
+                 -that were actually cloudy that were predicted to be cloudy 
+                 -that were actually cloudy that were predicted to be clear  
+                 -that were actually clear  that were predicted to be cloudy 
+    @param      predMap: a CloudMap representing the predicted cloud coverage
+    @param      trueMap: a CloudMap representing the true cloud coverage
+    
+    """
+
+    # TODO cloudyThreshold would presumably be determined by the tolerance
+    # LSST has for looking through clouds. I don't know that tolerance
+    # so I've arbitrarily set it
+    cloudyThreshold = 1000
     numTrueCloudy = np.size(np.where(trueMap > cloudyThreshold)[0])
     numTrueClear  = np.size(np.where(trueMap < cloudyThreshold)[0])
 
@@ -143,18 +147,23 @@ def calcAccuracy(predMap, trueMap):
             fracPredCloudyAndTrueClear)
 
 if __name__ == "__main__":
+    # the argument to this script is the date of the fits files to be converted
     if len(sys.argv) != 2:
         exit("usage is testPredClouds.py date")
     predDate = sys.argv[1]
+
+    # TODO update dir
+    # the files for each date are stored in a subdirectory of /data/allsky
     dataDir = "/data/allsky/ut" + predDate + "/fits/"
+    dataDir = "/home/drothchild/data/allsky/ut" + predDate + "/"
     filePrefix = "ut" + predDate + ".daycal."
     filePostfix = ".fits"
     def getFilename(filenum):
         return dataDir + filePrefix + str(filenum).zfill(4) + filePostfix
 
-    # inclusive start/end
+    # these numbers (inclusive) specify the range of files to convert
     fileNumStart = 201
-    fileNumEnd = 599
+    fileNumEnd = 333
     fileNums = range(fileNumStart, fileNumEnd + 1)
 
     # first get mjds for each fits file
@@ -189,40 +198,43 @@ if __name__ == "__main__":
             if y == 0 and x != 1:
                 # top left and right corners don't get images
                 continue
-            imgs[y,x] = axarr[y,x].imshow(placeholder, vmax=3000, cmap=plt.cm.jet)
+            imgs[y,x] = axarr[y,x].imshow(placeholder, vmax=4000, cmap=plt.cm.jet)
 
     # put titles on each subplot
     axarr[0,1].set_title("True Clouds")
 
-    # put stats legend in upper left
+    # put the stats legend in upper left
     axarr[0,0].axis("off")
     axarr[0,0].text(0, 0.2, "% cloudy pred as cloudy", color="blue")
     axarr[0,0].text(0, 0.5, "% cloudy pred as clear", color="green")
     axarr[0,0].text(0, 0.8, "% clear pred as cloudy", color="red")
 
+    # the second row contains the prediction images
     axarr[1,0].set_title("~5 Min Prediction")
     axarr[1,1].set_title("~10 Min Prediction")
     axarr[1,2].set_title("~20 Min Prediction")
 
+    # the third row contains the difference images
     axarr[2,0].set_title("Diff from True")
     axarr[2,1].set_title("Diff from True")
     axarr[2,2].set_title("Diff from True")
 
-    statColors = ["red", "green", "blue"]
-    
+    # the third row contains the accuracy charts
     for i in range(3):
         axarr[3,i].set_title("Accuracy")
         axarr[3,i].set_ylim([0,100])
         axarr[3,i].set_xticklabels([])
 
     # keep track of all the predictions in predMaps
+    # make predictions 5, 10, and 20 minutes into the future
     predTimes = [m / 60 / 24 for m in [5, 10, 20]]
     predMaps = [[None for i in range(len(predTimes))] 
                 for j in range(len(fileNums))]
-    # we keep track of three measures of accuracy for three prediction times
-    accuracies = np.zeros((len(fileNums), 3, 3))
 
-    # loop through ever image, predicting 5, 10, and 20 minutes ahead
+    # we keep track of 3 kinds of accuracy for len(predTimes) prediction times
+    accuracies = np.zeros((len(fileNums), len(predTimes), 3))
+
+    # loop through each image, predicting 5, 10, and 20 minutes ahead
     # at each step and storing the results in the arrays above
     for i in range(len(fileNums)):
         curFileNum = fileNums[i]
@@ -231,29 +243,41 @@ if __name__ == "__main__":
         fileName = getFilename(curFileNum)
         if not os.path.exists(fileName):
             # there are some missing files. Too bad
+            # TODO copy prediction image to get rid of lag
             continue
 
-        fitsFile = fits.open(fileName)[0]
 
-        # convert to a CloudMap
-        hpix = fits2Hpix(fitsFile.data)
+        # get a CloudMap representation of this fileNum
+        fitsFile = fits.open(fileName)[0]
+        (width, height) = (fitsFile.header["naxis1"], fitsFile.header["naxis2"])
+        registerFitsDimensions(width, height)
+        fitsData = fitsFile.data.astype(float)
+        bias = fitsFile.header["bias"]
+
+        hpix = fits2Hpix(fitsData, bias)
         curMap = cloudMap.fromHpix(str(curFileNum), hpix)
 
         # and post to the CloudServer
         cloudServer.postCloudMap(curMjd, curMap)
 
         if not cloudServer.isReadyForPrediction():
-            # can't pred before we have enough posted data
+            # can't predict before we have enough posted to the server
             continue
 
-        # make a prediction for each predTime in predTimes
+        # make a prediction for each of the times we're predicting ahead
         for predTimeId in range(len(predTimes)):
+            # predTime is the amount of time ahead we're predicting
             predTime = predTimes[predTimeId]
+
             # figure out which fileNum we're trying to predict
             # this will be the fileNum approximately predTime days after
             # the ith fileNum
             predFileNumId = -1
             for j in range(i, len(fileNums)):
+                # yes this is linear search through a sorted array
+                # not sure why I did this -- pretty sure there's some
+                # built-in function that would work?? 
+                # not like perf in this loop matters...
                 if mjds[j] > curMjd + predTime:
                     predFileNumId = j
                     break
@@ -263,12 +287,19 @@ if __name__ == "__main__":
 
 
         # now plot all the images for number i
-        # TODO should keep this all private--can probably override subtraction
+        # TODO should keep cloudData private--can probably override subtraction
+        # actually this might be very annoying to do...
+
+        # set the true cloud map at the current time
         imgs[0,1].set_data(curMap.cloudData)
+
+        # list the time of the true map in the upper right slot
         t = Time(curMjd, format="mjd").datetime
         axarr[0,2].cla()
         axarr[0,2].axis("off")
         axarr[0,2].text(0.2, 0.5, date.strftime(t, "%H:%M:%S"))
+
+        # set the pred image, diff image, and accuracy image for each predTime
         for predTimeId in range(len(predTimes)):
             predMap = predMaps[i][predTimeId]
             if predMap is not None:
@@ -276,10 +307,9 @@ if __name__ == "__main__":
                 diff = np.abs(predMap.cloudData - curMap.cloudData)
                 diff[np.where(~predMap.validMask | ~curMap.validMask)] = 0
                 imgs[2,predTimeId].set_data(diff)
-                #(fracCloudyandCloudy, 
-                # fracPreddClearAndTrueCloudy, 
-                # fracPredCloudyAndTrueClear) = calcAccuracy(predMap, curMap)
+
                 accuracies[i][predTimeId] = list(calcAccuracy(predMap, curMap))
+
                 axarr[3,predTimeId].cla()
                 axarr[3,predTimeId].set_title("Accuracy")
                 axarr[3,predTimeId].set_ylim([0,100])
@@ -290,5 +320,5 @@ if __name__ == "__main__":
         path = "fullpngs/ut" + predDate
         if not os.path.isdir(path):
             os.mkdir(path)
-        pylab.savefig(path + "/" + str(curFileNum) + ".png", dpi=200)
+        pylab.savefig(path + "/" + str(curFileNum).zfill(5) + ".png", dpi=200)
 

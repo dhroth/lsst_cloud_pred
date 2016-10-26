@@ -28,7 +28,6 @@ rMax = 0.9 * xyMax / 2
 
 # z is the vertical distance in pixels from the observer to the clouds
 # It is chosen to make the skymap fill our XY coordinates.
-# TODO I'm not sure I'm doing this right but it seems to work?
 z = 40
 
 # minimum distance from the sun in pixels 
@@ -88,9 +87,10 @@ class CloudMap:
             raise ValueError("the passed in cloud data has the wrong shape")
         if sunPos is not None and (sunPos[0] < 0 or sunPos[0] > xyMax or
                                    sunPos[1] < 0 or sunPos[1] > xyMax):
-            #raise ValueError
             print("the passed-in sunPos is invalid:", sunPos)
-            # TODO hack
+            # TODO sometimes the sun position is invalid since it got shifted
+            # off the map due to the velocity propagation. This should 
+            # probably be handled better 
             sunPos = None
 
         self.cloudData = cloudData
