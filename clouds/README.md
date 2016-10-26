@@ -16,7 +16,7 @@ During full operations, an all-sky camera will be periodically imaging the whole
 
 Alternatively, under the publish/subscribe architecture, whatever code is hosting the cloud prediction code can periodically call `CloudServer.predCloudMap` and then publish the result.
 
-Currently, the code is exercised using the `testPredClouds.py` file. This file reads in data from fits files, presents it to a `CloudServer` as if in real time, and then queries the `CloudServer` for predictions. It then calculates the accuracy of the predictions compared to the true clouds at the later time, and it visualizes the results.
+Currently, the code is exercised using the `testPredClouds.py` file. This file reads in data from fits files, presents it to a `CloudServer` as if in real time, and then queries the `CloudServer` for predictions. It then calculates the accuracy of the predictions compared to the true clouds at the later time, and it visualizes the results. You can run this file with the command `python testPredClouds.py 111515`. The `111515` specifies which files the script should use (the ones from the date 11/15/15), but because I've only uploaded data from one day, the only valid input is `111515`.
 
 ## Data
 
